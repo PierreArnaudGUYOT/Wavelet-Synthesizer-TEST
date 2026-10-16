@@ -400,7 +400,7 @@
   }
 
   // ---------------------------------------------------------------- demo (Bach, Toccata in D minor)
-  demo = WSDemo({
+  const demoApi = {
     C, P, PARAMS, ui, post,
     startAudio: () => startAudio(),
     setParam: (i, v) => setParam(i, v, false),
@@ -415,10 +415,14 @@
     snapshot: () => ({ values: toKeyed(), presetId, presetName, dirty }),
     restore: (s) => { applyKeyed(s.values); presetId = s.presetId; presetName = s.presetName; dirty = s.dirty; ui.setPresetName(presetName, dirty); },
     setPresetLabel: (txt, modified) => ui.setPresetName(txt, !!modified),
-  });
+  };
+  demo = WSDemo(demoApi);
+  // TEST BUILD: ▶ DEMO = listen to the 150 new presets and vote (web/js/vote.js); the ▾ menu keeps the demo pieces
+  const vote = WSVote(demoApi);
   ui.makeDemoButton({
-    running: () => demo.running(),
-    stop: () => demo.stop(),
+    main: () => vote.start().catch(() => {}),
+    running: () => demo.running() || vote.running(),
+    stop: () => { demo.stop(); vote.stop(); },
     songs: () => demo.songs(),
     play: (i) => demo.start(i).catch(() => {}),
     loadFile: () => $('file-midi').click(),
@@ -467,6 +471,7 @@
     demoTour: (i) => demo.tourPlan(i || 0),
     demoStop: () => demo.stop(),
     demoState: () => demo.state(),
+    voteStart: () => vote.start(), voteStop: () => vote.stop(), voteRunning: () => vote.running(), votes: () => vote.votes(), voteText: () => vote.fileText(),
     midi: (bytes) => onMIDI({ data: bytes }),
     midiLearn: (key) => midiLearn(P[key]),
     midiMap: () => Object.assign({}, ccMap),

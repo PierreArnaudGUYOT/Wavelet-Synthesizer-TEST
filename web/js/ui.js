@@ -437,7 +437,7 @@ class SynthUI {
   makeDemoButton(d) {
     const b = el('button', 'hbtn demo-btn', this.dev);
     b.innerHTML = '&#9654; DEMO';
-    b.title = 'Play the default demo: Beethoven, Appassionata (III), with a tour of all the presets (a new preset about every 4 s, on a change of chord)';
+    b.title = 'TEST: listen to the 150 new presets (5 s of Beethoven each) and vote from 1 to 10 stars';
     const arrow = el('button', 'hbtn demo-arrow', this.dev);
     arrow.innerHTML = '&#9662;';
     arrow.title = 'Choose another demo song or load your own MIDI file';
@@ -445,7 +445,7 @@ class SynthUI {
     b.onclick = (e) => {
       e.stopPropagation();
       close();
-      if (d.running()) d.stop(); else d.play(0);
+      if (d.running()) d.stop(); else if (d.main) d.main(); else d.play(0);
     };
     arrow.onclick = (e) => {
       e.stopPropagation();
