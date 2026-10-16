@@ -1,6 +1,6 @@
 # Wavelet Synthesizer
 
-> **TEST version** (private repository, branch `preset-test`). Plugin **"Wavelet Synthesizer TEST"**: own name and IDs,
+> **TEST version** (branch `preset-test`). Plugin **"Wavelet Synthesizer TEST"**: own name and IDs,
 > it installs next to the official plugin. Presets are numbered in their names: **001–100** new presets in every
 > category, **101–150** "Wave" presets using the new **WAVELET MORPH** (WAVELET 2, MORPH, ENV>WAV in the engine A panel,
 > LFO > WAVELET), **151–257** the official presets for comparison. "Wave" in a name = a preset that exploits the
