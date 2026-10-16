@@ -20,7 +20,8 @@ set "HERE=%~dp0"
 set "ROOT=%HERE%.."
 set "OUT=%ROOT%\build"
 set "OBJ=%OUT%\obj"
-set "BUNDLE=%OUT%\WaveletSynthesizer.vst3"
+rem TEST BUILD (branch preset-test): own bundle name, installs next to the official plugin
+set "BUNDLE=%OUT%\WaveletSynthesizerTEST.vst3"
 if not exist "%OBJ%" mkdir "%OBJ%"
 
 where node >nul 2>nul && (
@@ -38,11 +39,11 @@ x86_64-w64-mingw32-windres "%HERE%src\version.rc" -O coff -o "%OBJ%\version.o" |
 
 echo [3/4] linking
 if not exist "%BUNDLE%\Contents\x86_64-win" mkdir "%BUNDLE%\Contents\x86_64-win"
-x86_64-w64-mingw32-clang++ -shared -static -s -o "%BUNDLE%\Contents\x86_64-win\WaveletSynthesizer.vst3" ^
+x86_64-w64-mingw32-clang++ -shared -static -s -o "%BUNDLE%\Contents\x86_64-win\WaveletSynthesizerTEST.vst3" ^
   "%OBJ%\plugin.o" "%OBJ%\editor.o" "%OBJ%\iids.o" "%OBJ%\vst2.o" "%OBJ%\funknown.o" "%OBJ%\version.o" ^
   -lgdiplus -lgdi32 -luser32 -lshell32 -lole32 -luuid || exit /b 1
 rem the same DLL as a VST2 plug-in: hosts scanning a VST2 folder find this .dll inside the bundle folder
-copy /Y "%BUNDLE%\Contents\x86_64-win\WaveletSynthesizer.vst3" "%BUNDLE%\Contents\x86_64-win\WaveletSynthesizer.dll" >nul || exit /b 1
+copy /Y "%BUNDLE%\Contents\x86_64-win\WaveletSynthesizerTEST.vst3" "%BUNDLE%\Contents\x86_64-win\WaveletSynthesizerTEST.dll" >nul || exit /b 1
 
 echo [4/4] copying manuals and licences into the bundle
 if not exist "%BUNDLE%\Contents\Resources\manual" mkdir "%BUNDLE%\Contents\Resources\manual"
@@ -52,6 +53,6 @@ copy /Y "%HERE%external\pluginterfaces\LICENSE.txt" "%BUNDLE%\Contents\Resources
 
 echo.
 echo Done: %BUNDLE%
-echo Install: copy the whole WaveletSynthesizer.vst3 folder into your VST3 folder ("C:\Program Files\Common Files\VST3",
+echo Install: copy the whole WaveletSynthesizerTEST.vst3 folder into your VST3 folder ("C:\Program Files\Common Files\VST3",
 echo          or run install.bat) or into your VST2 plug-in folder: it works in both.
 endlocal

@@ -1,0 +1,325 @@
+WAVELET SYNTHESIZER TEST - presets to listen to
+=============================================
+
+Plugin: "Wavelet Synthesizer TEST" (installs next to the official Wavelet Synthesizer).
+Every preset name starts with its number: note the numbers you like, they will be copied into the official version.
+A = engine A (subtractive), B = engine B (additive), AB = both engines mixed.
+"Wave" in a name = a preset that exploits the wavelets (morph, sparsity, position window, Haar...).
+
+NEW: WAVELET MORPH (engine A panel: WAVELET 2, MORPH, ENV>WAV; LFO section: WAVELET).
+The sound is also built with WAVELET 2 and the two are crossfaded: MORPH + LFO x "LFO > WAVELET" + mod envelope x ENV>WAV.
+In engine A the wavelet is heard where the sound is shaped in the wavelet domain: scale filter (cutoff, resonance),
+sparsity, position window. Presets 101-150 use the morph; many move the morph and the cutoff at the same time.
+
+
+--- NEW: Bass ---
+001 · A · Deep Saw Bass              mono saw bass, steep resonant low-pass with envelope, sine sub, legato glide
+002 · A · Square Sub Bass            round square bass with a square sub two octaves down
+003 · B · Drawbar Bass               organ-like bass from the four lowest drawbars, short body, sine sub
+004 · A · Acid Line                  303-style: very resonant low-pass snapping open, glide, drive and a short echo
+005 · AB · Growl Bass                Haar saw + Walsh atoms, LFO on the cutoff, heavy drive and sub
+006 · A · Pulse Bass                 narrow pulse with a short filter envelope and a little sub
+007 · B · Pick Bass                  picked bass: impulse atoms, bright bands dying fast, triangle sub
+008 · A · Reso Sweep Bass            resonant saw bass whose cutoff breathes with a slow LFO
+009 · A · Fat Unison Bass            three detuned saws, mono, filter envelope, sine sub
+010 · B · Organ Sub Bass             two drawbars and a strong sine sub: deep, steady
+011 · A · Wave Haar Grit Bass        Haar square with 40 % sparsity: stepped, gritty, driven
+
+--- NEW: Lead ---
+012 · A · Wave Sync Lead             saw whose position window sweeps the cycle: a hard-sync-like movement
+013 · A · Soft Sine Lead             pure sine, soft attack, vibrato, echo and reverb
+014 · B · Walsh Chip Lead            Haar Walsh atoms: 8-bit console lead with vibrato and echo
+015 · A · Screaming Lead             very resonant saw, two unison copies, strong drive
+016 · AB · Duo Lead                  saw (A) and mirror atoms (B) together, slightly detuned, vibrato
+017 · A · Hollow Square Lead         clarinet-like square lead with a sub and vibrato
+018 · B · Flute Lead                 breathy flute: almost only the fundamental band, soft attack, vibrato
+019 · A · Wave Sparse Lead           Haar saw keeping 30 % of its atoms: digital, glassy, with echoes
+020 · A · Talking Lead               resonant band-pass moved by the LFO: a talking "wah" lead
+021 · AB · Brass Lead                brassy lead: filter swell on a saw (A) plus ramp atoms (B), unison
+
+--- NEW: Keys ---
+022 · AB · Soft E-Piano              soft electric piano: sine body (A) + impulse atoms (B), chorus
+023 · A · Bright Piano               triangle whose filter opens with velocity: a bright, simple piano
+024 · B · Bell Piano                 Walsh atoms with bell-like decay, light chorus
+025 · A · Harpsichord                thin pulse through a high-pass, quick decay
+026 · A · Dyno Keys                  punchy electric piano: resonant filter snap, velocity, chorus
+027 · B · Celesta Keys               celesta one octave up: bands 1, 3 and 5, reverb
+028 · AB · Wurli Bark                reed piano: driven pulse (A) + mirror atoms (B), velocity bark
+029 · A · Wave Glass Window Keys     triangle with a position window: glassy attack, chorus and reverb
+030 · B · Mallet Keys                soft mallet keys: four low bands, chorus, short echo
+
+--- NEW: Organ ---
+031 · B · Full Drawbar Organ         nine drawbars out, vibrato and chorus: full and bright
+032 · B · Percussive Organ           jazz organ with a percussion click (bright bands decay), drive
+033 · B · Theatre Organ              mirror atoms, deep vibrato, chorus and hall
+034 · A · Combo Organ                60s combo organ: filtered square, vibrato, a little drive
+035 · B · Reed Pipe Organ            alternate atoms (reedy), slow attack, big church reverb
+036 · AB · Gospel Mix Organ          drawbars (B) plus a square (A), drive and fast vibrato
+037 · B · Soft Flute Organ           soft flute stops, chorus and reverb
+
+--- NEW: Pad ---
+038 · A · Sweep Pad                  resonant saw pad whose filter sweeps slowly, three unison copies
+039 · B · Air Pad                    random atoms, bands fading in one by one, very wide and airy
+040 · AB · Warm Blend Pad            saw (A) and mirror atoms (B) half and half, warm and wide
+041 · A · Wave Window Motion Pad     square whose position window travels slowly through the cycle
+042 · B · Choir Pad                  vowel-like drawbars on mirror atoms, unison, slow vibrato
+043 · A · Wave Dark Sparse Pad       half the atoms of a saw behind a steep low-pass: dark, grainy
+044 · AB · Shimmer Pad               high-passed saw + Walsh atoms with long echoes: shimmering
+045 · B · Evolving Bands Pad         bright bands come first and fade to a warm body (scale envelope)
+046 · A · Analog Brass Pad           slow filter swell on detuned saws: Oberheim-style brass pad
+047 · AB · Glass Choir               sine (A) + random atoms (B): glassy choir, chorus and hall
+048 · A · Noise Wash Pad             resonant band-passed noise drifting slowly in a huge reverb
+
+--- NEW: Strings ---
+049 · A · Ensemble Strings           string ensemble: saws, gentle low-pass, unison, strong chorus
+050 · A · Cello Section              one octave down, vibrato, slight unison
+051 · AB · Silk Strings              saw (A) + mirror atoms (B), slow attack, deep chorus
+052 · A · Spiccato Strings           short bowed notes for fast lines
+053 · B · Vox Strings                mirror atoms with unison and chorus: string-machine voices
+054 · A · Shimmering Strings         strings with a fast LFO on the cutoff: a tremolo shimmer
+055 · AB · Choir Ahh                 triangle (A) + vowel drawbars (B): an "ahh" choir
+056 · A · Solo Violin                mono legato violin with expressive vibrato
+
+--- NEW: Brass & Wind ---
+057 · A · Fat Brass                  three detuned saws with a brassy filter swell
+058 · A · Trumpet                    mono trumpet: bright filter attack, vibrato
+059 · B · Oboe                       reedy oboe: alternate atoms on six drawbars, vibrato
+060 · AB · Sax Breath                saxophone-like: alternate atoms (B) with a little noise (A), drive
+061 · B · Pan Flute                  soft pan flute, slow attack, reverb
+062 · A · French Horn                round horn: triangle with a soft filter swell
+063 · A · Brass Section Stab         short brass section hit
+
+--- NEW: Pluck ---
+064 · A · Nylon Guitar               soft nylon pluck, velocity-sensitive
+065 · A · Steel Pluck                brighter steel-string pluck, light chorus
+066 · B · Kalimba                    kalimba: sparse partials (bands 1, 4, 7), short body
+067 · AB · Harp Glide                triangle (A) + impulse atoms (B), long decay, large room
+068 · A · Pizz Delay                 short pizzicato pluck through dotted echoes
+069 · B · Sitar-ish                  Daubechies 2 Walsh atoms with a buzzing decay, drive
+070 · A · Wave Haar Pluck            Haar square plucked by a resonant filter, echoes
+071 · AB · Bell Pluck                sine (A) + Walsh atoms (B): a pluck with a bell tone
+
+--- NEW: Bells & Mallets ---
+072 · B · Church Bell                low bell one octave down, very long decay, cathedral reverb
+073 · B · Xylophone                  dry, short xylophone one octave up
+074 · AB · Steel Drum                steel pan: sine (A) + mirror atoms (B), short body
+075 · B · Wind Chimes                random atoms two octaves up, echoes and hall
+076 · B · Soft Vibes                 soft vibraphone with a fast chorus as the motor tremolo
+077 · A · Wave Haar Bells            high-passed Haar saw (a staircase): bright digital bells
+078 · AB · Gamelan                   pulse (A) + Walsh atoms (B): metallic gamelan
+
+--- NEW: FX ---
+079 · A · Rising Wind                noise through a sharp band-pass rising with a saw LFO
+080 · B · Wave Random Computer       Haar random atoms scanned by a sample & hold window: 70s computer
+081 · A · UFO                        sine with a huge vibrato, echoes and reverb
+082 · AB · Dark Drone                two octaves down: saw (A) + random atoms (B), slow filter, sub, hall
+083 · A · Wave Glitch Stutter        Haar square with 85 % sparsity, square LFO on the filter, short echoes
+084 · B · Sonar Ping                 short ping one octave up in long echoes
+085 · A · Siren Sweep                resonant band-pass swept up and down by a triangle LFO
+
+--- NEW: Drums & Perc ---
+086 · A · Thump Kick                 deep kick: sine and sine sub, two octaves down (play C2-C3)
+087 · A · Clap Noise                 band-passed noise burst with room reverb
+088 · B · Conga                      hand drum: low bands, very short body
+089 · A · Rim Shot                   very short high-passed resonant saw click with a triangle sub
+090 · A · Shaker                     short high-passed noise
+
+--- NEW: Wavelet Originals ---
+091 · A · Wave Atom Scanner          a narrow window scans the atoms of the cycle back and forth
+092 · A · Wave Sparsity Crusher      a saw reduced to 8 % of its atoms: crushed but in tune
+093 · B · Wave Random Atoms 1        Haar random atoms (seed 3): a stepped, buzzy organ
+094 · B · Wave Random Atoms 2        Daubechies 20 random atoms (seed 77): smooth, vocal
+095 · B · Wave Band Cascade          bands enter from low to high over 1.5 s, then decay apart
+096 · B · Wave Reverse Bands         high bands enter first, the body comes after: a reversed-sounding attack
+097 · A · Wave Edge Wah              only the edge of a square is filtered, the window moving with the LFO
+098 · AB · Wave Haar Twins           Haar triangle (A) and Haar mirror atoms (B): a stepped digital pad
+099 · A · Wave Window Formant        band-pass plus a slowly moving window: vowel-like formants
+100 · B · Wave Walsh Pipes           Walsh atoms on every other drawbar: hollow digital pipes
+
+--- NEW: Wave Morph ---
+101 · A · Wave Morph Bass            bass: the envelope morphs Haar (attack) to Daubechies 20 while the filter closes
+102 · A · Wave Wobble Bass           bass: the LFO morphs Daubechies 20 / Haar and moves the cutoff together
+103 · A · Wave Step Bass             bass: a square LFO switches Daubechies 4 / Haar in steps
+104 · A · Wave Pluck Bass            bass: pulse, the envelope moves the morph (Symlet 8 to Haar) and the cutoff together
+105 · A · Wave Sub Growl             bass: very resonant, slow Haar / Daubechies 20 morph, drive, big sub
+106 · A · Wave Reese Morph           bass: detuned saws, slow LFO on the morph and the cutoff together
+107 · A · Wave Sparse Bass           bass: 60 % sparsity, the envelope changes the wavelet so other atoms survive
+108 · AB · Wave Hybrid Bass          bass: saw (A) + Walsh atoms (B), LFO on the morph and the cutoff
+109 · A · Wave Morph Lead            lead: a 5 Hz morph Daubechies 20 / Haar shimmers with the vibrato
+110 · A · Wave Sweep Lead            lead: a triangle LFO sweeps the morph (DB4 / Haar) and a resonant cutoff together
+111 · A · Wave Attack Lead           lead: each note starts on Haar and slides to Daubechies 20, the filter follows
+112 · A · Wave Window Lead           lead: the LFO moves the position window and the morph together
+113 · A · Wave S/H Lead              lead: sample and hold jumps the wavelet and the cutoff at random
+114 · A · Wave Pulse Lead            lead: starts smooth (Coiflet 3) and turns to Haar as the envelope falls
+115 · AB · Wave Duo Lead             lead: saw (A) + mirror atoms (B), the atoms change shape with the LFO
+116 · A · Wave Morph Piano           keys: a bright Haar strike morphing to Daubechies 20 while the filter closes
+117 · A · Wave EP Tremolo            keys: an electric piano whose timbre trembles (morph Daubechies 20 / DB2 at 5 Hz)
+118 · A · Wave Clav                  keys: a clavinet whose attack is Haar, envelope on the morph
+119 · A · Wave Digital Piano         keys: 40 % sparsity, envelope on the morph (DB8 to Haar) and the cutoff
+120 · A · Wave Glass Keys            keys: position window plus a slow morph, glassy
+121 · A · Wave Morph Pad             pad: a slow LFO on the morph (Daubechies 20 / Haar) and the cutoff together
+122 · A · Wave Drift Pad             pad: a very slow drift between Daubechies 8 and Haar
+123 · A · Wave Breathing Pad         pad: a slow envelope swells the morph and the cutoff together
+124 · A · Wave Sparse Pad            pad: 55 % sparsity, the morph changes which atoms survive
+125 · A · Wave Window Pad            pad: pulse, the LFO moves the window and the morph
+126 · AB · Wave Atom Choir           pad: mirror atoms (B) change shape (Daubechies 20 / Symlet 8), choir-like
+127 · A · Wave Dark Morph            pad: steep resonant low-pass, slow morph and cutoff, dark and moving
+128 · A · Wave Shimmer Pad           pad: high-pass, Haar brings stepped highs in and out, echoes
+129 · A · Wave Band-Pass Pad         pad: resonant band-pass, LFO on the morph and the cutoff together
+130 · B · Wave Morph Organ Pad       pad: drawbar atoms going from smooth to square (Daubechies 20 / Haar)
+131 · A · Wave Strings               strings: a light 5.5 Hz morph adds a bowed shimmer
+132 · A · Wave Bowed Cello           strings: the bow attack is Haar, then smooth; one octave down
+133 · A · Wave Tremolo Strings       strings: a square LFO on the morph and the cutoff, a timbral tremolo
+134 · AB · Wave Choir Strings        strings: saw (A) + mirror atoms (B), slow morph to Coiflet 3
+135 · A · Wave Brass                 brass: the attack morphs and opens the filter together
+136 · A · Wave Horn Swell            brass: a slow swell of the morph and the cutoff, round horn
+137 · A · Wave Brass Stab            brass: a short stab with a Haar bite on the attack
+138 · A · Wave Morph Pluck           pluck: Haar attack morphing to Daubechies 20 with the filter, echoes
+139 · A · Wave Harp                  pluck: a harp whose strike is Haar, long smooth ring
+140 · A · Wave Koto                  pluck: square, envelope on the morph (Symlet 8 to Haar), slight vibrato
+141 · A · Wave Arp Pluck             pluck: a square LFO alternates the wavelet from note to note in arpeggios
+142 · AB · Wave Bell Pluck           pluck: sine (A) + Walsh atoms (B) that morph on each strike
+143 · B · Wave Morph Bells           bells: a square Haar strike ringing into smooth Daubechies 20 atoms
+144 · B · Wave Glass Chimes          bells: random atoms one octave up, morphing slowly, echoes
+145 · A · Wave Metal Bell            bells: high-passed resonant saw, Haar on the strike, one octave up
+146 · A · Wave Robot                 FX: sample and hold on the morph and a band-pass cutoff together, a talking robot
+147 · A · Wave Riser                 FX: noise through a band-pass, a saw LFO on the morph and the cutoff
+148 · A · Wave Laser                 FX: a fast saw LFO on the morph and the pitch, long echoes
+149 · A · Wave Glitch Morph          FX: 85 % sparsity, a square LFO on the morph and the cutoff
+150 · AB · Wave Alien Drone          FX: two octaves down, a very slow LFO on the morph and the cutoff, sub and hall
+
+
+--- For comparison: the official presets (version 0.2) ---
+
+  ★ Favourites
+  151 · A · Square Mod 2
+  152 · A · Wavelet Lead
+  153 · A · Haar Bass
+  154 · A · Edge Pluck
+  155 · B · Focus Sweep
+  156 · B · Soft Flute
+  157 · A · Infra Sub Bass
+  158 · A · Dub Echo Lead
+  159 · A · Fuzz Bass
+  160 · A · Laser Sweep
+  161 · A · Warm Pad
+  162 · B · Mirror Sub Bass
+  163 · A · Sparse Keys
+  164 · B · Space Choir
+  165 · A · Square Mod
+
+  Bass
+  166 · A · Sub Saw Bass
+  167 · A · Reese Sub
+  168 · A · Acid Sub
+  169 · B · Sub Organ Bass
+  170 · A · Deep Sub Pluck
+  171 · AB · Sub Hybrid Bass
+  172 · A · Ladder Bass
+  173 · B · Pluck Bass
+  174 · AB · Wobble Bass
+  175 · A · Rubber Bass
+  176 · A · Octave Bass
+
+  Lead
+  177 · B · Chip Walsh
+  178 · B · Chip Echo
+  179 · A · Chorus Square Lead
+  180 · AB · Organ Lead
+  181 · AB · Chip Hybrid
+  182 · A · Saw Lead
+  183 · A · Whistle Lead
+  184 · A · Pulse Lead
+  185 · AB · Hybrid Lead
+
+  Keys
+  186 · A · Clean Keys
+  187 · AB · Hybrid Keys
+  188 · AB · Glass Keys
+  189 · A · Tine Piano
+  190 · AB · Electric Piano
+  191 · B · Reed Piano
+  192 · A · Clavi
+  193 · B · Toy Piano
+  194 · A · Lo-Fi Piano
+
+  Organ
+  195 · B · Octave Organ
+  196 · B · Distorted Organ
+  197 · B · Ensemble Organ
+  198 · B · Jazz Organ
+  199 · B · Gospel Organ
+  200 · B · Church Organ
+  201 · B · Reed Organ
+  202 · B · Flute Organ
+
+  Pad
+  203 · A · Glass Pad
+  204 · A · Cathedral Saw
+  205 · B · Random Glass
+  206 · B · Mirror Pad
+  207 · A · Poly Chorus Pad
+  208 · B · Glass Ensemble
+  209 · AB · Wavelet Choir
+  210 · AB · Bell Pad
+  211 · AB · Dream Pad
+  212 · A · Analog Pad
+  213 · A · Dark Pad
+  214 · B · Halo Pad
+  215 · AB · Evolving Pad
+
+  Strings
+  216 · A · String Machine
+  217 · A · Solina Cellos
+  218 · AB · Hybrid Strings
+  219 · AB · Space Strings
+  220 · A · Chamber Strings
+  221 · A · Pizzicato
+  222 · A · Slow Strings
+  223 · AB · Analog Strings
+
+  Brass & Wind
+  224 · A · Noise Brass
+  225 · B · Chorus Flute
+  226 · AB · Wide Brass
+  227 · A · Synth Brass
+  228 · A · Brass Stab
+  229 · B · Clarinet
+  230 · AB · Breathy Flute
+
+  Pluck
+  231 · B · Impulse Pluck
+  232 · AB · Shimmer Pluck
+  233 · A · Harp
+  234 · B · Koto
+  235 · A · Synth Pluck
+  236 · AB · Arp Pluck
+
+  Bells & Mallets
+  237 · B · Walsh Bells
+  238 · B · Music Box
+  239 · B · Glockenspiel
+  240 · B · Vibraphone
+  241 · B · Marimba
+  242 · B · Tubular Bells
+  243 · AB · Crystal Bell
+
+  FX
+  244 · A · Scanning Edge
+  245 · B · Alien Texture
+  246 · A · Wind
+  247 · B · Sci-Fi Burble
+  248 · AB · Robot Voice
+  249 · A · Alarm
+
+  Drums & Perc
+  250 · AB · Sub Kick
+  251 · A · Noise Snare
+  252 · A · Closed Hat
+  253 · A · Open Hat
+  254 · B · Wood Block
+  255 · A · Synth Tom
+
+  Init
+  256 · A · Init
+  257 · B · Init

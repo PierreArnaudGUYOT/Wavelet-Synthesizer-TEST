@@ -106,6 +106,15 @@ add('ab_mix', 'A/B Mix', 'MIX', { fmt: 'abmix', min: 0, max: 1, def: 0 });
 add('ch_mix', 'Chorus', 'CHORUS', { min: 0, max: 1, def: 0 });
 add('ch_rate', 'Chorus Rate', 'RATE', { curve: 'exp', fmt: 'hz', min: 0.1, max: 3, def: 0.7 });
 add('ch_depth', 'Chorus Depth', 'DEPTH', { min: 0, max: 1, def: 0.6 });
+// TEST BUILD: WAVELET MORPH. The sound is also built with WAVELET 2 and crossfaded with the main one: position MORPH
+// (0 = WAVELET, 1 = WAVELET 2) + LFO x LFO TO WAVELET + mod envelope x ENV TO WAVELET. Audible where the wavelet
+// shapes the sound: scale filter (CUTOFF, RESO), sparsity, position window, and all of engine B.
+add('wav2', 'Wavelet 2', 'WAVELET 2', { curve: 'choice', fmt: 'choice', min: 0, max: 6, def: 0, structural: true,
+  choices: ['Haar', 'Daubechies 2', 'Daubechies 4', 'Daubechies 8', 'Symlet 8', 'Coiflet 3', 'Daubechies 20'],
+  choiceShort: ['HAAR', 'DB2', 'DB4', 'DB8', 'SYM8', 'COIF3', 'DB20'] });
+add('wmorph', 'Wavelet Morph', 'MORPH', { min: 0, max: 1, def: 0 });
+add('lfo_wav', 'LFO to Wavelet Morph', 'WAVELET', { min: 0, max: 1, def: 0 });
+add('env_wav', 'Envelope to Wavelet Morph', 'ENV>WAV', { fmt: 'bipct', min: -1, max: 1, def: 0 });
 
 const idx = Object.fromEntries(P.map((p, i) => [p.key, i]));
 
@@ -131,9 +140,11 @@ section('header', '', 0, 0, 1100, 48, '', [
 
 section('engA', 'ENGINE A · WAVELET SUBTRACTIVE', 12, 56, 544, 260, 'A', [
   { type: 'seg', param: 'a_wave', x: 12, y: 32, w: 520, h: 28 },
-  { type: 'atom', x: 12, y: 70, w: 250, h: 136 },
-  { type: 'step', param: 'wavelet', x: 12, y: 214, w: 250, h: 30 },
-  { type: 'source', x: 276, y: 70, w: 256, h: 64 },
+  { type: 'atom', x: 12, y: 70, w: 250, h: 104 },
+  { type: 'step', param: 'wavelet', x: 12, y: 180, w: 250, h: 28 },
+  { type: 'step', param: 'wav2', x: 12, y: 214, w: 250, h: 28 },   // TEST BUILD: wavelet morph
+  { type: 'source', x: 276, y: 70, w: 184, h: 64 },
+  kn('wmorph', 470, 64), kn('env_wav', 470, 122),
   kn('a_width', 280, 146, 'knobL'),
   kn('a_sparsity', 376, 146, 'knobL'),
   kn('ab_mix', 470, 180),   // same place in both engine panels
@@ -173,7 +184,7 @@ section('modenv', 'MOD ENVELOPE', 836, 324, 252, 140, '', [
 ]);
 section('lfo', 'LFO', 12, 472, 284, 140, '', [
   { type: 'seg', param: 'lfo_shape', x: 12, y: 30, w: 260, h: 24 },
-  ...row(['lfo_rate', 'lfo_pitch', 'lfo_cut', 'lfo_pos'], 12, 64),
+  ...row(['lfo_rate', 'lfo_pitch', 'lfo_cut', 'lfo_pos', 'lfo_wav'], 12, 64),
 ]);
 section('voice', 'VOICE', 304, 472, 388, 140, '', [
   { type: 'seg', param: 'v_porta', x: 12, y: 30, w: 156, h: 22 },
@@ -537,4 +548,35 @@ for (const pr of PRESETS) for (const [k, v] of Object.entries(pr.v)) {
 }
 for (const s of S) for (const w of s.widgets) if (w.param && !(w.param in idx)) throw new Error('layout: unknown param ' + w.param);
 
-module.exports = { DEVICE, APP, DEFAULT_PRESET, PARAMS: P, INDEX: idx, SECTIONS: S, PRESETS, FAVOURITES: FAVOURITES.length, CATEGORIES };
+// ---------------------------------------------------------------- TEST BUILD (branch preset-test — not for GitHub)
+// The test plugin "Wavelet Synthesizer TEST" lists the 100 candidate presets of tools/test_presets.js first (001-100,
+// grouped "NEW · <category>"), then the official presets (101-207, the favourites grouped as "★ Favourites"). Every
+// name starts with its number, so that the good presets can be chosen by number after listening.
+// tools/test_levels.json (written by tools/test_levels.js) matches their loudness to the favourites.
+APP.name = 'Wavelet Synthesizer TEST';
+APP.version = 'TEST · 150 new presets + wavelet morph';
+const TEST_LIST = require('./test_presets.js');
+let TEST_LEVELS = {};
+try { TEST_LEVELS = require('./test_levels.json'); } catch (_) { /* not measured yet */ }
+const TEST_CATS = CATEGORIES.filter(c => c !== 'Init').concat('Wavelet Originals', 'Wave Morph');
+const testOrder = [];
+for (const c of TEST_CATS) for (const t of TEST_LIST) if (t.cat === c) testOrder.push(t);
+if (testOrder.length !== TEST_LIST.length) throw new Error('test presets: a category is not in TEST_CATS');
+const num = k => String(k + 1).padStart(3, '0');
+const TEST_PRESETS = testOrder.map((t, k) => {
+  const v = Object.assign({}, t.v);
+  if (v.ab_mix === undefined) v.ab_mix = v.engine || 0;
+  if (TEST_LEVELS[t.name] !== undefined) v.master = TEST_LEVELS[t.name];
+  for (const [key, x] of Object.entries(v)) {
+    if (!(key in idx)) throw new Error(`test preset ${t.name}: unknown param ${key}`);
+    if (x < P[idx[key]].min || x > P[idx[key]].max) throw new Error(`test preset ${t.name}: ${key}=${x} out of range`);
+  }
+  return { name: num(k) + ' · ' + t.name, base: t.name, cat: 'NEW · ' + t.cat, d: t.d, v, test: true };
+});
+const OFFICIAL_PRESETS = PRESETS.map((p, k) => ({ name: num(TEST_PRESETS.length + k) + ' · ' + p.name, base: p.name,
+  cat: k < FAVOURITES.length ? '★ Favourites' : p.cat, v: p.v }));
+const ALL_PRESETS = TEST_PRESETS.concat(OFFICIAL_PRESETS);
+const ALL_CATEGORIES = [...new Set(ALL_PRESETS.map(p => p.cat))];
+
+module.exports = { DEVICE, APP, DEFAULT_PRESET: ALL_PRESETS[0].name, PARAMS: P, INDEX: idx, SECTIONS: S, PRESETS: ALL_PRESETS,
+  FAVOURITES: 0, CATEGORIES: ALL_CATEGORIES, TEST_PRESETS, OFFICIAL_PRESETS };

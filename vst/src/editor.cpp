@@ -915,10 +915,12 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
     // (the categories are consecutive there). DestroyMenu also destroys the submenus.
     HMENU m = CreatePopupMenu();
     int cur = host->presetIndex();
-    AppendMenuW(m, MF_STRING | MF_GRAYED, 0, L"★ Favourites");
-    for (int k = 0; k < kNumFavourites && k < kNumPresets; k++)
-      AppendMenuW(m, MF_STRING | (k == cur ? MF_CHECKED : 0), 100 + k, toW(kPresets[k].name).c_str());
-    AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
+    if (kNumFavourites > 0) {   // TEST BUILD: no favourites at the top (they are a submenu there)
+      AppendMenuW(m, MF_STRING | MF_GRAYED, 0, L"★ Favourites");
+      for (int k = 0; k < kNumFavourites && k < kNumPresets; k++)
+        AppendMenuW(m, MF_STRING | (k == cur ? MF_CHECKED : 0), 100 + k, toW(kPresets[k].name).c_str());
+      AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
+    }
     for (int k = kNumFavourites; k < kNumPresets;) {
       const char* cat = kPresets[k].cat;
       HMENU sub = CreatePopupMenu();

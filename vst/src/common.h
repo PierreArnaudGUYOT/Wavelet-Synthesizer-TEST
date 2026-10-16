@@ -17,7 +17,7 @@ namespace Steinberg { namespace Vst { class IComponent; class IEditController; }
 namespace ws {
 
 #define WS_VENDOR "OktoPierre"
-#define WS_NAME "Wavelet Synthesizer"
+#define WS_NAME "Wavelet Synthesizer TEST"   // TEST BUILD (branch preset-test)
 #define WS_VERSION "0.1.0"   // beta 0.1
 
 // Live state the audio thread publishes for the editor, plus a queue of notes

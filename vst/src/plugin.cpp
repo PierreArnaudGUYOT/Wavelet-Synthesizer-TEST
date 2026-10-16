@@ -32,8 +32,8 @@ using namespace Steinberg::Vst;
 
 namespace ws {
 
-static const FUID kProcessorUID(0x2EF18A52, 0xA3A44A9E, 0x8C2C40AC, 0xE9D6925E);
-static const FUID kControllerUID(0xF2AA9A30, 0xE06A4D4E, 0xABE441AC, 0xA7CBFEB3);
+static const FUID kProcessorUID(0xF67BA933, 0x718C1C42, 0x7F714A8B, 0xE72F4E47);   // TEST BUILD: own IDs
+static const FUID kControllerUID(0xEFC7EABF, 0x856ECB28, 0x6804B7C1, 0x3BB05EF6);
 static constexpr uint32_t kStateMagic = 0x31595357;  // "WSY1"
 static constexpr uint32_t kCtlMagic = 0x31435357;    // "WSC1" (beta 0.1): zoom, preset index, modified flag
 static constexpr uint32_t kCtlMagic2 = 0x32435357;   // "WSC2": zoom, modified flag, preset name
@@ -342,7 +342,9 @@ class Processor : public IComponent, public IAudioProcessor, public IConnectionP
             engine.setParam((int)id, pv);
             // A/B MIX rebuilds the tables only when it reaches or leaves one end (engine A or B alone)
             const bool mixEnds = id == (ParamID)P_AB_MIX && ((old < 1) != (pv < 1) || (old > 0) != (pv > 0));
-            if (kParams[id].structural || mixEnds) structVersion.fetch_add(1);
+            // TEST BUILD: WAVELET MORPH needs (or no longer needs) the WAVELET 2 tables when one of its amounts leaves 0
+            const bool morphEnds = (id == (ParamID)P_WMORPH || id == (ParamID)P_LFO_WAV || id == (ParamID)P_ENV_WAV) && ((old == 0) != (pv == 0));
+            if (kParams[id].structural || mixEnds || morphEnds) structVersion.fetch_add(1);
           }
         }
       }

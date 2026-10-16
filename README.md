@@ -1,5 +1,13 @@
 # Wavelet Synthesizer
 
+> **TEST version** (private repository, branch `preset-test`). Plugin **"Wavelet Synthesizer TEST"**: own name and IDs,
+> it installs next to the official plugin. Presets are numbered in their names: **001–100** new presets in every
+> category, **101–150** "Wave" presets using the new **WAVELET MORPH** (WAVELET 2, MORPH, ENV>WAV in the engine A panel,
+> LFO > WAVELET), **151–257** the official presets for comparison. "Wave" in a name = a preset that exploits the
+> wavelets. The list with a description of every new preset: [PRESETS TO TEST.txt](PRESETS%20TO%20TEST.txt).
+> The plugin to install is in the Releases of this repository. The official version is
+> [Free-Wavelet-Synthesizer-VST](https://github.com/PierreArnaudGUYOT/Free-Wavelet-Synthesizer-VST).
+
 *Created by **Pierre Arnaud GUYOT** ("OktoPierre") — version **beta 0.2** (2026-10-15), see [RELEASE_HISTORY.md](RELEASE_HISTORY.md).
 Architecture and maintenance notes: [CLAUDE.md](CLAUDE.md).*
 

@@ -214,7 +214,7 @@ class Instance {
     fx.numPrograms = kNumPresets; fx.numParams = kNumParams; fx.numInputs = 0; fx.numOutputs = 2;
     fx.flags = vst2::effFlagsHasEditor | vst2::effFlagsCanReplacing | vst2::effFlagsProgramChunks | vst2::effFlagsIsSynth;
     fx.ioRatio = 1.0f; fx.object = this;
-    fx.uniqueID = ('O' << 24) | ('k' << 16) | ('W' << 8) | 'v';
+    fx.uniqueID = ('O' << 24) | ('k' << 16) | ('W' << 8) | 'T';   // TEST BUILD: own VST2 ID
     fx.version = 100;   // 0.1.0
 
     comp = newProcessor(); ctrl = newController();
