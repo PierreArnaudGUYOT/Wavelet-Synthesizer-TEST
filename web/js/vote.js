@@ -2,19 +2,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // TEST BUILD (branch preset-test): listening session with votes, started by ▶ DEMO.
 // Each of the 150 new presets (001-150) plays the same 5 s of Beethoven's Appassionata (III) — the busy passage from
-// 0:13 of the demo — then a window asks for a vote from 1 to 10 stars. The votes are kept in this browser (stop and
-// resume later) and written to a .txt file after every vote (Edge / Chrome: the file chosen at the start; otherwise the
-// file is downloaded with the "Download the votes" button). The .txt is read later to keep and rank the good presets.
+// 0:13 of the demo — then a window asks for a vote from 0 to 10 stars. Above 5 stars it offers to modify the preset:
+// the preset is reloaded exactly as designed, the window shrinks to a bar, the player changes the panel (mouse or MIDI
+// controller) and plays it (MIDI keyboard), then keeps the initial settings or records the change. The votes and the
+// recorded changes are kept in this browser (stop and resume later) and written to a .txt file after every vote or
+// change (Edge / Chrome: the file chosen at the start; otherwise "Download the votes"). The .txt is read later to keep,
+// rank and correct the good presets.
 function WSVote(api) {
   'use strict';
-  const P = api.P;
+  const P = api.P, PARAMS = api.PARAMS, C = api.C;
   const START = 12.9, LEN = 5;                 // the passage (seconds of the default demo) and its length
   const LEAD = 0.12;                           // seconds between loading a preset and its first note
   const STORE = 'ws.votes.test';
   const PRESETS = WS_SPEC.PRESETS.filter(p => p.cat.startsWith('NEW · '));   // 001-150
+  const ASK_ABOVE = 5;                         // a vote above this offers to modify the preset
   // the same playing rules as the demo's preset tour: polyphonic, normal octave, no glide, short attacks, short echoes
   const SAFE = { v_voices: 16, v_oct: 0, v_glide: 0 };
   const MAX_ATTACK = 0.08, MAX_DMIX = 0.1, MAX_DFB = 0.3;
+  // parameters a recorded change may contain: the sound only (not the panel tab, not the wheels or the pedal)
+  const EDITABLE = PARAMS.map((p, i) => i).filter(i => !PARAMS[i].hidden && PARAMS[i].key !== 'engine');
 
   // the 5 s passage: notes starting in [START, START + LEN), cut at the end of the passage
   const song = WS_DEMO_SONGS[0], notes = [];
@@ -27,30 +33,57 @@ function WSVote(api) {
   for (let i = 0; i < notes.length; i += 4) notes[i] -= t0;   // starts on its first note
 
   const store = {
-    get() { try { const v = JSON.parse(localStorage.getItem(STORE) || 'null'); return v && typeof v.votes === 'object' ? v : { votes: {} }; } catch (_) { return { votes: {} }; } },
+    get() {
+      try {
+        const v = JSON.parse(localStorage.getItem(STORE) || 'null');
+        if (v && typeof v.votes === 'object') { if (typeof v.changes !== 'object' || !v.changes) v.changes = {}; return v; }
+      } catch (_) { /* unreadable */ }
+      return { votes: {}, changes: {} };
+    },
     set(v) { try { localStorage.setItem(STORE, JSON.stringify(v)); } catch (_) { /* storage unavailable */ } },
   };
-  let data = store.get();            // { votes: { '001': 7, ... } }
-  let s = null;                      // session: { k, saved, timer, phase: 'start'|'play'|'vote'|'end', handle }
+  let data = store.get();            // { votes: { '001': 7, ... }, changes: { '012': { f_cutoff: [7, 5.5], ... } } }
+  let s = null;                      // session: { k, saved, timer, phase: 'start'|'play'|'vote'|'ask'|'edit'|'end', base }
   let win = null, fileHandle = null, writing = Promise.resolve();
   const num = (k) => PRESETS[k].name.slice(0, 3);
-  const nextFree = () => { const k = PRESETS.findIndex(p => !data.votes[p.name.slice(0, 3)]); return k < 0 ? PRESETS.length : k; };
+  const voted = (n) => data.votes[n] !== undefined;
+  const nextFree = () => { const k = PRESETS.findIndex(p => !voted(p.name.slice(0, 3))); return k < 0 ? PRESETS.length : k; };
   const nVotes = () => Object.keys(data.votes).length;
+  const fmt = (i, v) => C.format(PARAMS[i], v);
 
   // ---------------------------------------------------------------- votes file
   function fileText() {
     const L = [];
     const d = new Date(), pad = (x) => String(x).padStart(2, '0');
-    L.push('Wavelet Synthesizer TEST - preset votes (1 star = not good ... 10 stars = excellent)');
+    L.push('Wavelet Synthesizer TEST - preset votes (0 stars = bad ... 10 stars = excellent)');
     L.push('Listening: Beethoven, Appassionata (III), 5 s from 0:13 of the demo; each preset played polyphonic at its normal octave.');
-    L.push(`Saved: ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}   Votes: ${nVotes()} / ${PRESETS.length}`);
+    L.push(`Saved: ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}   ` +
+      `Votes: ${nVotes()} / ${PRESETS.length}   Presets with a recorded change: ${Object.keys(data.changes).length}`);
     L.push('');
-    L.push('NUMBER | STARS | PRESET');
-    for (const p of PRESETS) { const v = data.votes[p.name.slice(0, 3)]; L.push(`${p.name.slice(0, 3)} | ${v ? String(v).padStart(2) : ' -'} | ${p.name.slice(6)}`); }
+    L.push('NUMBER | STARS | CHANGED | PRESET');
+    for (const p of PRESETS) {
+      const n = p.name.slice(0, 3);
+      L.push(`${n} | ${voted(n) ? String(data.votes[n]).padStart(2) : ' -'} | ${data.changes[n] ? 'yes    ' : '       '} | ${p.name.slice(6)}`);
+    }
     L.push('');
     L.push('RANKING (best first)');
-    const ranked = PRESETS.filter(p => data.votes[p.name.slice(0, 3)]).sort((a, b) => data.votes[b.name.slice(0, 3)] - data.votes[a.name.slice(0, 3)] || (a.name < b.name ? -1 : 1));
-    for (const p of ranked) L.push(`${String(data.votes[p.name.slice(0, 3)]).padStart(2)} | ${p.name}`);
+    const ranked = PRESETS.filter(p => voted(p.name.slice(0, 3))).sort((a, b) => data.votes[b.name.slice(0, 3)] - data.votes[a.name.slice(0, 3)] || (a.name < b.name ? -1 : 1));
+    for (const p of ranked) L.push(`${String(data.votes[p.name.slice(0, 3)]).padStart(2)} | ${p.name}${data.changes[p.name.slice(0, 3)] ? '   (changed)' : ''}`);
+    L.push('');
+    L.push('PRESET CHANGES (recorded by the player: apply them to the preset)');
+    L.push('Format: parameter key: value in the preset -> new value   (name: shown value -> new shown value)');
+    const changed = PRESETS.filter(p => data.changes[p.name.slice(0, 3)]);
+    if (!changed.length) L.push('(none)');
+    for (const p of changed) {
+      const n = p.name.slice(0, 3), ch = data.changes[n];
+      L.push('');
+      L.push(`${p.name}   (${voted(n) ? data.votes[n] + ' stars' : 'not voted'})`);
+      for (const key of Object.keys(ch)) {
+        const i = P[key]; if (i === undefined) continue;
+        const [a, b] = ch[key];
+        L.push(`  ${key}: ${+a.toFixed(6)} -> ${+b.toFixed(6)}   (${PARAMS[i].name}: ${fmt(i, a)} -> ${fmt(i, b)})`);
+      }
+    }
     return L.join('\r\n') + '\r\n';
   }
   function saveFile() {
@@ -80,19 +113,20 @@ function WSVote(api) {
   function build() {
     const st = document.createElement('style');
     st.textContent = `
-.vote-win { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); width: min(640px, 94vw); z-index: 200;
+.vote-win { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); width: min(700px, 94vw); z-index: 200;
   background: rgba(13,16,20,0.97); border: 1px solid #2fd4c6; border-radius: 12px; box-shadow: 0 16px 50px rgba(0,0,0,0.7);
   color: #e9edf2; font: 13px Segoe UI, system-ui, sans-serif; padding: 14px 18px 12px; display: none; }
 .vote-win h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: .12em; color: #2fd4c6; }
 .vote-win .vname { font-size: 19px; font-weight: 700; margin: 2px 0 2px; }
 .vote-win .vdesc { color: #9aa3b0; min-height: 18px; }
-.vote-win .vstars { display: flex; gap: 6px; margin: 12px 0 8px; }
+.vote-win .vstars { display: flex; gap: 5px; margin: 12px 0 8px; }
 .vote-win .vstars button { flex: 1; height: 46px; border-radius: 8px; border: 1px solid #343b47; background: #1d2129; color: #ffcf4a;
-  font-size: 17px; cursor: pointer; line-height: 1.05; }
-.vote-win .vstars button small { display: block; font-size: 10px; color: #9aa3b0; }
+  font-size: 17px; cursor: pointer; line-height: 1.05; padding: 0; }
+.vote-win .vstars button small { display: block; font-size: 9.5px; color: #9aa3b0; }
 .vote-win .vstars button:hover, .vote-win .vstars button.on { background: #ffcf4a; color: #0d1014; }
 .vote-win .vstars button:hover small, .vote-win .vstars button.on small { color: #0d1014; }
 .vote-win .vstars.off button { opacity: .35; pointer-events: none; }
+.vote-win .vstars.hide { display: none; }
 .vote-win .vbar { height: 4px; background: #262c35; border-radius: 2px; overflow: hidden; margin: 6px 0 8px; }
 .vote-win .vbar i { display: block; height: 100%; width: 0; background: #2fd4c6; }
 .vote-win .vrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -100,20 +134,26 @@ function WSVote(api) {
 .vote-win .vrow button.main { border-color: #2fd4c6; color: #2fd4c6; font-weight: 700; }
 .vote-win .vrow button:hover { border-color: #2fd4c6; }
 .vote-win .vstat { color: #9aa3b0; font-size: 11.5px; margin-top: 8px; min-height: 15px; }
-.vote-win .vhelp { color: #6f7885; font-size: 11px; margin-top: 4px; }`;
+.vote-win .vhelp { color: #6f7885; font-size: 11px; margin-top: 4px; }
+.vote-win.compact { bottom: 6px; padding: 8px 14px 8px; border-color: #ffcf4a; width: min(900px, 96vw); }
+.vote-win.compact h3 { color: #ffcf4a; }
+.vote-win.compact .vname { font-size: 14px; }
+.vote-win.compact .vdesc { font-size: 12px; min-height: 0; margin-bottom: 6px; }
+.vote-win.compact .vbar, .vote-win.compact .vhelp { display: none; }
+.vote-win.compact .vstat { margin-top: 6px; }`;
     document.head.appendChild(st);
     const w = document.createElement('div');
     w.className = 'vote-win';
     w.innerHTML = '<h3 class="vtitle">LISTEN AND VOTE · 150 NEW PRESETS</h3><div class="vname"></div><div class="vdesc"></div>' +
       '<div class="vbar"><i></i></div><div class="vstars"></div><div class="vrow"></div><div class="vstat"></div>' +
-      '<div class="vhelp">Keys: 1–9 and 0 (= 10) vote · R replays · ← previous · S skips · Esc stops. Your votes are kept in this browser.</div>';
+      '<div class="vhelp">Keys: 0–9 vote, + (or =) = 10 · R replays · ← previous · S skips · Esc stops. Your votes are kept in this browser.</div>';
     document.body.appendChild(w);
     win = { el: w, title: w.querySelector('.vtitle'), name: w.querySelector('.vname'), desc: w.querySelector('.vdesc'),
       bar: w.querySelector('.vbar i'), stars: w.querySelector('.vstars'), row: w.querySelector('.vrow'), stat: w.querySelector('.vstat') };
-    for (let n = 1; n <= 10; n++) {
+    for (let n = 0; n <= 10; n++) {
       const b = document.createElement('button');
-      b.innerHTML = `${n}<small>${n === 1 ? 'not good' : n === 10 ? 'excellent' : '★'}</small>`;
-      b.title = n + (n > 1 ? ' stars' : ' star');
+      b.innerHTML = `${n}<small>${n === 0 ? 'bad' : n === 10 ? 'excellent' : '★'}</small>`;
+      b.title = n + (n === 1 ? ' star' : ' stars');
       b.onclick = () => vote(n);
       win.stars.appendChild(b);
     }
@@ -128,11 +168,14 @@ function WSVote(api) {
       win.row.appendChild(b);
     }
   }
-  function showStars(on, current) {
-    win.stars.classList.toggle('off', !on);
-    [...win.stars.children].forEach((b, i) => b.classList.toggle('on', current === i + 1));
+  function showStars(mode, current) {   // mode: 'on' | 'off' | 'hide'
+    win.stars.classList.toggle('off', mode === 'off');
+    win.stars.classList.toggle('hide', mode === 'hide');
+    [...win.stars.children].forEach((b, i) => b.classList.toggle('on', current === i));
   }
+  const compact = (on) => win.el.classList.toggle('compact', !!on);
   const fileLabel = () => (fileHandle ? `Votes file: ${fileHandle.name} (rewritten after every vote).` : 'No votes file chosen yet: the votes are kept in this browser; you can also download them.');
+  const voteNote = (n) => (voted(n) ? `Already voted: ${data.votes[n]} stars${data.changes[n] ? ', change recorded' : ''}. ` : '');
 
   // ---------------------------------------------------------------- session
   async function start() {
@@ -148,26 +191,28 @@ function WSVote(api) {
   function showStart() {
     s.phase = 'start';
     clearTimeout(s.timer);
+    compact(false);
     win.title.textContent = 'LISTEN AND VOTE · 150 NEW PRESETS';
     const done = nVotes();
     win.name.textContent = done ? `${done} of ${PRESETS.length} presets voted` : `${PRESETS.length} new presets to vote on`;
-    win.desc.textContent = 'Each preset plays 5 s of Beethoven (Appassionata, the busy passage at 0:13), then vote from 1 (not good) to 10 stars (excellent).';
+    win.desc.textContent = 'Each preset plays 5 s of Beethoven (Appassionata, the busy passage at 0:13), then vote from 0 (bad) to 10 stars (excellent). ' +
+      `Above ${ASK_ABOVE} stars you can modify the preset and record the change.`;
     win.bar.style.width = (100 * done / PRESETS.length) + '%';
-    showStars(false);
+    showStars('off');
     const next = nextFree();
     const list = [];
     if (window.showSaveFilePicker) list.push([fileHandle ? 'Change the votes file…' : 'Choose the votes file (.txt)…', async () => { await chooseFile(); status(fileLabel()); showStart(); }, !fileHandle]);
     if (next < PRESETS.length) list.push([done ? `Continue at ${num(next)}` : 'Start at 001', () => play(next), !!fileHandle || !window.showSaveFilePicker]);
     if (done) list.push(['Start again at 001', () => play(0)]);
     if (done) list.push(['Download the votes', download]);
-    if (done) list.push(['Clear all votes', () => { if (confirm('Clear all your votes?')) { data = { votes: {} }; saveFile(); showStart(); } }]);
+    if (done) list.push(['Clear all votes', () => { if (confirm('Clear all your votes and recorded changes?')) { data = { votes: {}, changes: {} }; saveFile(); showStart(); } }]);
     list.push(['Close', stop]);
     buttons(list);
     status(fileLabel());
   }
-  function applyPreset(k) {
-    api.post({ t: 'seqstop' });
-    api.post({ t: 'soundoff' });   // no tail of the previous preset
+  function stopSound() { api.post({ t: 'seqstop' }); api.post({ t: 'soundoff' }); }
+  function loadForListening(k) {
+    stopSound();   // no tail of the previous preset
     api.applyPreset(PRESETS[k].name);
     const v = api.values();
     for (const key in SAFE) api.setParam(P[key], SAFE[key]);
@@ -176,21 +221,23 @@ function WSVote(api) {
     if (v[P.fx_dfb] > MAX_DFB) api.setParam(P.fx_dfb, MAX_DFB);
     api.setPresetLabel(PRESETS[k].name, false);
   }
+  function playPassage() { setTimeout(() => api.post({ t: 'seq', notes, delay: 0 }), LEAD * 1000); }
   function play(k) {
     if (!s) return;
     if (k >= PRESETS.length) { finish(); return; }
     s.k = Math.max(0, k);
     s.phase = 'play';
     clearTimeout(s.timer);
-    applyPreset(s.k);
+    compact(false);
+    loadForListening(s.k);
+    const n = num(s.k);
     win.title.textContent = `PRESET ${s.k + 1} OF ${PRESETS.length} · ${PRESETS[s.k].cat.replace('NEW · ', '')}`;
     win.name.textContent = PRESETS[s.k].name;
-    win.desc.textContent = 'Playing… ' + (WS_SPEC.TEST_DESC && WS_SPEC.TEST_DESC[PRESETS[s.k].name] || '');
-    showStars(false, data.votes[num(s.k)]);
+    win.desc.textContent = 'Playing… ' + ((WS_SPEC.TEST_DESC && WS_SPEC.TEST_DESC[PRESETS[s.k].name]) || '');
+    showStars('off', data.votes[n]);
     buttons([['Stop', stop]]);
-    status(data.votes[num(s.k)] ? `Already voted: ${data.votes[num(s.k)]} stars (a new vote replaces it).` : fileLabel());
-    // the passage, then the vote
-    setTimeout(() => api.post({ t: 'seq', notes, delay: 0 }), LEAD * 1000);
+    status(voteNote(n) || fileLabel());
+    playPassage();
     const t1 = performance.now();
     const tick = () => {
       if (!s || s.phase !== 'play') return;
@@ -206,54 +253,110 @@ function WSVote(api) {
     api.post({ t: 'seqstop' });   // the notes end, their release and the effects fade out
     s.phase = 'vote';
     win.desc.textContent = (WS_SPEC.TEST_DESC && WS_SPEC.TEST_DESC[PRESETS[s.k].name]) || 'How do you like this preset?';
-    showStars(true, data.votes[num(s.k)]);
+    showStars('on', data.votes[num(s.k)]);
     buttons([['▶ Replay', () => play(s.k), true], ['◀ Previous', () => play(s.k - 1)], ['Skip', () => play(s.k + 1)], ['Stop', stop]]);
-    status((data.votes[num(s.k)] ? `Already voted: ${data.votes[num(s.k)]} stars. ` : '') + 'Vote 1–10 (you can also play the keyboard to try the preset).');
+    status(voteNote(num(s.k)) + 'Vote 0–10 (you can also play the keyboard to try the preset).');
   }
   function vote(n) {
     if (!s || s.phase !== 'vote') return;
     data.votes[num(s.k)] = n;
-    showStars(true, n);
+    showStars('on', n);
     saveFile();
+    if (n > ASK_ABOVE) askModify(n); else play(s.k + 1);
+  }
+  // ---- above 5 stars: modify the preset?
+  function askModify(n) {
+    s.phase = 'ask';
+    win.desc.textContent = `You gave ${n} stars. Do you want to modify this preset? You will change the panel (mouse or MIDI controller) ` +
+      'and play it on your MIDI keyboard, then keep the initial settings or record the change.';
+    showStars('on', n);
+    buttons([['Yes, modify it', startEdit, true], ['No, next preset', () => play(s.k + 1)], ['Stop', stop]]);
+    status('Keys: Y = yes, N = no.');
+  }
+  function startEdit() {
+    if (!s) return;
+    s.phase = 'edit';
+    clearTimeout(s.timer);
+    stopSound();
+    // the preset exactly as designed (without the listening rules), and the values the change is measured from
+    api.applyPreset(PRESETS[s.k].name);
+    const prev = data.changes[num(s.k)];
+    if (prev) for (const key of Object.keys(prev)) if (P[key] !== undefined) api.setParam(P[key], prev[key][1]);   // continue a recorded change
+    s.base = Float64Array.from(WS_SPEC.PRESETS.find(p => p.name === PRESETS[s.k].name).values);
+    api.setPresetLabel(PRESETS[s.k].name, !!prev);
+    compact(true);
+    win.title.textContent = `MODIFY ${PRESETS[s.k].name}`;
+    win.name.textContent = 'Change the sound on the panel, play it on your MIDI keyboard';
+    win.desc.textContent = 'The preset is loaded exactly as designed (normal octave, voices, attack and echoes of the preset).' +
+      (prev ? ' Your previous recorded change is applied.' : '');
+    showStars('hide');
+    buttons([['▶ Play the passage', () => { stopSound(); playPassage(); }], ['Keep initial settings', keepInitial],
+      ['Record preset change', recordChange, true], ['Stop', stop]]);
+    status('');
+  }
+  function diff() {
+    const v = api.values(), ch = {};
+    for (const i of EDITABLE) if (Math.abs(v[i] - s.base[i]) > 1e-9) ch[PARAMS[i].key] = [s.base[i], v[i]];
+    return ch;
+  }
+  function keepInitial() {
+    if (!s) return;
+    delete data.changes[num(s.k)];
+    saveFile();
+    play(s.k + 1);
+  }
+  function recordChange() {
+    if (!s) return;
+    const ch = diff(), keys = Object.keys(ch);
+    if (!keys.length) { status('Nothing has changed yet: move a control on the panel, or choose "Keep initial settings".'); return; }
+    data.changes[num(s.k)] = ch;
+    saveFile();
+    status(`Recorded: ${keys.map(k => PARAMS[P[k]].name).join(', ')}.`);
     play(s.k + 1);
   }
   function finish() {
     s.phase = 'end';
     clearTimeout(s.timer);
+    compact(false);
     api.post({ t: 'seqstop' });
     win.title.textContent = 'LISTEN AND VOTE · FINISHED';
     win.name.textContent = `${nVotes()} of ${PRESETS.length} presets voted — thank you!`;
-    const top = PRESETS.filter(p => data.votes[p.name.slice(0, 3)]).sort((a, b) => data.votes[b.name.slice(0, 3)] - data.votes[a.name.slice(0, 3)]).slice(0, 5);
-    win.desc.textContent = top.length ? 'Your top 5: ' + top.map(p => `${p.name.slice(0, 3)} (${data.votes[p.name.slice(0, 3)]})`).join(', ') : '';
+    const top = PRESETS.filter(p => voted(p.name.slice(0, 3))).sort((a, b) => data.votes[b.name.slice(0, 3)] - data.votes[a.name.slice(0, 3)]).slice(0, 5);
+    win.desc.textContent = (top.length ? 'Your top 5: ' + top.map(p => `${p.name.slice(0, 3)} (${data.votes[p.name.slice(0, 3)]})`).join(', ') + '. ' : '') +
+      `${Object.keys(data.changes).length} preset change(s) recorded.`;
     win.bar.style.width = '100%';
-    showStars(false);
+    showStars('off');
     buttons([['Download the votes', download, true], ['Back to the start', showStart], ['Close', stop]]);
     status(fileLabel());
   }
   function stop() {
     if (!s) return;
     clearTimeout(s.timer);
-    api.post({ t: 'seqstop' });
-    api.post({ t: 'soundoff' });
+    stopSound();
     const saved = s.saved;
     s = null;
-    if (win) win.el.style.display = 'none';
+    if (win) { win.el.style.display = 'none'; compact(false); }
     api.ui.setDemoRunning(false);
     api.restore(saved);
   }
-  // keys while the window is open (before the app's computer-keyboard notes)
+  // keys while the window is open (before the app's computer-keyboard notes); while modifying a preset the keys play
+  // notes as usual
   document.addEventListener('keydown', (e) => {
-    if (!s || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if (!s || s.phase === 'edit' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
     let used = true;
     if (e.key === 'Escape') stop();
-    else if (s.phase === 'vote' && /^(Digit|Numpad)[0-9]$/.test(e.code)) { const d = +e.code.slice(-1); vote(d === 0 ? 10 : d); }
+    else if (s.phase === 'vote' && /^(Digit|Numpad)[0-9]$/.test(e.code)) vote(+e.code.slice(-1));
+    else if (s.phase === 'vote' && (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+')) vote(10);
     else if (s.phase === 'vote' && e.code === 'KeyR') play(s.k);
+    else if (s.phase === 'ask' && e.code === 'KeyY') startEdit();
+    else if (s.phase === 'ask' && e.code === 'KeyN') play(s.k + 1);
     else if ((s.phase === 'vote' || s.phase === 'play') && (e.code === 'ArrowLeft' || e.code === 'Backspace')) play(s.k - 1);
     else if ((s.phase === 'vote' || s.phase === 'play') && e.code === 'KeyS') play(s.k + 1);
     else used = false;
     if (used) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 
-  return { start, stop, running: () => !!s, votes: () => Object.assign({}, data.votes), fileText };
+  return { start, stop, running: () => !!s, phase: () => (s ? s.phase : 'off'), votes: () => Object.assign({}, data.votes),
+    changes: () => JSON.parse(JSON.stringify(data.changes)), fileText };
 }

@@ -30,6 +30,11 @@ struct SharedState {
   std::atomic<uint32_t> voices{0};
   std::atomic<uint32_t> keys[4];
   std::atomic<uint32_t> blocks{0};
+  // TEST BUILD: the voting session's passage, played by the audio thread (sample-accurate, see vote_data.h)
+  std::atomic<uint32_t> seqStart{0};   // editor: +1 = play the passage from its start
+  std::atomic<int> seqStop{0};         // editor: 1 = stop it (its notes are released), 2 = stop it and silence everything
+  std::atomic<uint32_t> seqDone{0};    // audio: the seqStart number of the last passage played to its end
+  std::atomic<float> seqTime{-1};      // audio: seconds played of the current passage (-1 = none or waiting for the sound)
 
   struct Ev { int16_t note; int16_t vel; };  // vel 1..127 = on, 0 = off, -1 = all notes off
   static constexpr uint32_t QN = 256;
@@ -69,6 +74,9 @@ struct EditorHost {
   virtual int presetIndex() = 0;
   virtual bool presetDirty() = 0;
   virtual void loadPreset(int index) = 0;
+  // TEST BUILD (voting session): the preset shown in the browser, and a whole sound set back (one host undo step)
+  virtual void setPresetShown(int index, bool dirty) = 0;
+  virtual void setSound(const double* plain, int presetIndex, bool dirty) = 0;
   virtual double zoom() = 0;
   virtual void setZoom(double z) = 0;
   virtual void editorClosed() = 0;

@@ -5,9 +5,14 @@
 > category, **101–150** "Wave" presets using the new **WAVELET MORPH** (WAVELET 2, MORPH, ENV>WAV in the engine A panel,
 > LFO > WAVELET), **151–257** the official presets for comparison. "Wave" in a name = a preset that exploits the
 > wavelets. The list with a description of every new preset: [PRESETS TO TEST.txt](PRESETS%20TO%20TEST.txt).
-> **Listen and vote online:** https://pierrearnaudguyot.github.io/Wavelet-Synthesizer-TEST/ (Edge or Chrome) — **▶ DEMO**
-> plays each of the 150 new presets for 5 s (Beethoven, Appassionata, the busy passage at 0:13) and asks for a vote from
-> 1 to 10 stars; the votes go to a .txt file rewritten after every vote, and stay in the browser to resume later.
+> **Listen and vote in the plugin (Ableton):** the **VOTE** button (next to the logo) plays each of the 150 new presets
+> for 5 s (Beethoven, Appassionata, the busy passage at 0:13: the plugin plays it itself) and asks for a vote from
+> 0 to 10 stars. Above 5 stars it offers to **modify** the preset: change the panel with the mouse, play it on the MIDI
+> keyboard, then **Keep initial settings** or **Record preset change**. Every vote and change is saved at once to
+> `Documents\Wavelet Synthesizer TEST\wavelet-votes.txt` (or the file chosen with **Change file…**): stop when you like,
+> VOTE → **Continue** picks up where you stopped.
+> **Or online:** https://pierrearnaudguyot.github.io/Wavelet-Synthesizer-TEST/ (Edge or Chrome) — **▶ DEMO** runs the
+> same session in the browser (votes kept in the browser and written to a .txt file).
 > The plugin to install is in the Releases of this repository. The official version is
 > [Free-Wavelet-Synthesizer-VST](https://github.com/PierreArnaudGUYOT/Free-Wavelet-Synthesizer-VST).
 

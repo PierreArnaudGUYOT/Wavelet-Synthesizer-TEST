@@ -7,7 +7,12 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
+#include <shlobj.h>
+#include <commdlg.h>
 #include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <functional>
 namespace Gdiplus { using std::min; using std::max; }
 #include <gdiplus.h>
 #include <cmath>
@@ -18,6 +23,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include "pluginterfaces/gui/iplugview.h"
 #include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "common.h"
+#include "generated/vote_data.h"
 
 using namespace Steinberg;
 namespace G = Gdiplus;
@@ -61,6 +67,10 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
       }
     }
     for (int i = 0; i < kNumParams; i++) lastPlain[i] = host->getPlain(i);
+    // TEST BUILD: the VOTE button takes the place of the zoom box (as DEMO in the web app), which moves next to the logo;
+    // the session votes on the new presets 001-150 (category "NEW · ...")
+    for (auto& it : items) if (it.w->type == W_ZOOM) it.r.x = 150;
+    for (int k = 0; k < kNumPresets; k++) if (std::strncmp(kPresets[k].cat, "NEW \xC2\xB7 ", 7) == 0) vList.push_back(k);
   }
   virtual ~Editor() { cleanup(); if (keepAlive) keepAlive->release(); }
 
@@ -179,6 +189,7 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
   }
 
   void cleanup() {
+    if (vPhase != V_OFF) voteStop();   // closing the window ends the voting session (the votes are already saved)
     if (hwnd) {
       KillTimer(hwnd, 1);
       if (mouseNote >= 0) noteOff(mouseNote);
@@ -269,6 +280,7 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
       float nl = std::max(pl, meterL * 0.86f), nr = std::max(pr, meterR * 0.86f);
       if (std::fabs(nl - meterL) > 1e-5f || std::fabs(nr - meterR) > 1e-5f) { meterL = nl; meterR = nr; invalidateType(W_METER); }
     }
+    voteTick();
   }
 
   // ---------------------------------------------------------------- drawing helpers
@@ -367,6 +379,7 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
       // value bubble for small knobs and drawbars
       int b = drag >= 0 ? drag : hover;
       if (b >= 0 && visible(items[b]) && (items[b].w->type == W_KNOBS || items[b].w->type == W_DRAWBAR)) drawBubble(g, items[b]);
+      drawVote(g);
     }
     BitBlt(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right - ps.rcPaint.left, ps.rcPaint.bottom - ps.rcPaint.top, memDC, ps.rcPaint.left, ps.rcPaint.top, SRCCOPY);
     EndPaint(hwnd, &ps);
@@ -795,6 +808,7 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
   void noteOff(int n) { auto sh = host->sharedState(); if (sh) sh->push(SharedState::Ev{(int16_t)n, 0}); }
 
   void wheelOn(int idx, int dir) {
+    if (vPhase != V_OFF && vPhase != V_EDIT) return;   // the voting window covers the panel
     const Item& it = items[idx];
     int id = it.w->param;
     if (id < 0 || !(it.w->type == W_KNOBL || it.w->type == W_KNOBM || it.w->type == W_KNOBS || it.w->type == W_KNOBT || it.w->type == W_DRAWBAR || it.w->type == W_SEG || it.w->type == W_STEP)) return;
@@ -806,8 +820,18 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
   }
 
   void mouseDown(float x, float y, bool dbl) {
+    // TEST BUILD: the VOTE button starts or stops the session; its window takes the clicks (only its bar while a preset
+    // is modified, the rest of the panel then works as usual, except the preset browser)
+    // (a double-click's second click is ignored there: it would hit the next screen's button)
+    if (kVoteBtn.has(x, y)) { if (!dbl) { if (vPhase == V_OFF) voteBegin(); else voteStop(); } return; }
+    if (vPhase != V_OFF && (vPhase != V_EDIT || kVoteBar.has(x, y))) { if (!dbl) voteClick(x, y); return; }
     int idx = hit(x, y);
     if (idx < 0) return;
+    if (vPhase == V_EDIT && items[idx].w->type == W_PRESETS) {
+      vStatus = L"The preset browser is locked while you modify a preset: keep or record first.";
+      invalidateLogical(kVoteBar);
+      return;
+    }
     const Item& it = items[idx];
     const WidgetDef& w = *it.w;
     bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -885,6 +909,14 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
       double n = std::min(1.0, std::max(0.0, dragNorm - (y - dragY) / (shift ? range * 5 : range)));
       double v = toPlain(p, n);
       if (v != plainOf(it.w->param)) { setPlain(it.w->param, v); onTimer(); }
+      return;
+    }
+    // TEST BUILD: hover on the VOTE button and in the voting window
+    const int vh = voteHit(x, y);
+    if (vh != vHover) { vHover = vh; invalidateLogical(kVoteBtn); voteInvalidate(); }
+    if (vPhase != V_OFF && (vPhase != V_EDIT || kVoteBar.has(x, y))) {
+      if (hover >= 0) { int old = hover; hover = -1; invalidateItem(old); }
+      if (!tracking) { TRACKMOUSEEVENT t{sizeof t, TME_LEAVE, hwnd, 0}; TrackMouseEvent(&t); tracking = true; }
       return;
     }
     int h = hit(x, y);
@@ -968,6 +1000,446 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
     ShellExecuteW(nullptr, L"open", man.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
   }
 
+  // ================================================================ TEST BUILD: listen-and-vote session
+  // VOTE plays each of the new presets 001-150 with the same 5 s of Beethoven as the web app (the plug-in plays it
+  // itself: vote_data.h), then asks a vote from 0 to 10 stars. Above 5 stars it offers to modify the preset: it is
+  // loaded exactly as designed, a bar replaces the on-screen keyboard, the player changes the panel with the mouse and
+  // plays it on the MIDI keyboard, then keeps the initial settings or records the change (the parameters that differ
+  // from the preset). Votes and changes are rewritten to the votes file after every vote or change (nothing is lost
+  // when the player stops) and read back at the next session, which continues where it stopped. The file is
+  // Documents\Wavelet Synthesizer TEST\wavelet-votes.txt unless the player chooses another one (remembered in the
+  // registry); it has the same format as the web app's file.
+  enum { V_OFF, V_START, V_PLAY, V_VOTE, V_ASK, V_EDIT, V_END };
+  static constexpr int kAskAbove = 5;                       // a vote above this offers to modify the preset
+  static constexpr double kLead = 0.15;                     // seconds between loading a preset and its passage
+  static constexpr R kVoteBtn{222, 9, 60, 30};              // the VOTE button (header)
+  static constexpr R kVoteCard{200, 226, 700, 262};         // the voting window
+  static constexpr R kVoteBar{352, 620, 740, 96};           // the bar shown while a preset is modified (over the keyboard)
+  static constexpr uint32_t kStar = 0xffcf4a;
+  struct VChange { int param; double from, to; };
+  struct VBtn { std::wstring label; std::function<void()> fn; bool main; R r; };
+  int vPhase = V_OFF, vK = 0, vHover = -1;                  // vHover: button index, 100 + n = star n, 200 = VOTE
+  std::vector<int> vList;                                   // preset indices of 001-150
+  std::vector<int> vVotes;                                  // per vList entry, -1 = not voted
+  std::vector<std::vector<VChange>> vChanges;               // per vList entry, empty = no recorded change
+  std::vector<VBtn> vBtns;
+  std::wstring vTitle, vName, vDesc, vStatus;
+  double vSaved[kNumParams] = {}; int vSavedPreset = 0; bool vSavedDirty = false;
+  ULONGLONG vT0 = 0; uint32_t vSeqId = 0; bool vSent = false; float vProgress = 0;
+  std::wstring vPath, vSaveErr;                             // the votes file; the last save error ('' = saved)
+  static constexpr const wchar_t* kVoteReg = L"Software\\OktoPierre\\Wavelet Synthesizer TEST";   // HKCU, value VotesFile
+
+  std::string vNum(int k) const { return std::string(kPresets[vList[k]].name, 3); }
+  int vVoted() const { int n = 0; for (int v : vVotes) if (v >= 0) n++; return n; }
+  int vChanged() const { int n = 0; for (auto& c : vChanges) if (!c.empty()) n++; return n; }
+  int vNextFree() const { for (size_t k = 0; k < vList.size(); k++) if (vVotes[k] < 0) return (int)k; return (int)vList.size(); }
+  static std::wstring voteDir() {
+    if (voteTesting()) return voteTestDir();
+    wchar_t p[MAX_PATH] = {};
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_PERSONAL | CSIDL_FLAG_CREATE, nullptr, 0, p))) return L"";
+    return std::wstring(p) + L"\\Wavelet Synthesizer TEST";
+  }
+  // tests (vst/devtest/vote_session.cpp): the votes folder WS_VOTES_DIR, read from the process environment (the C
+  // runtime's copy is taken when the host starts, before a test sets it)
+  static std::wstring voteTestDir() {
+    wchar_t b[MAX_PATH] = {};
+    const DWORD n = GetEnvironmentVariableW(L"WS_VOTES_DIR", b, MAX_PATH);
+    return n > 0 && n < MAX_PATH ? std::wstring(b) : std::wstring();
+  }
+  static bool voteTesting() { return !voteTestDir().empty(); }
+  // the votes file chosen before (the default one when none, and always in tests)
+  static std::wstring voteRememberedPath() {
+    wchar_t buf[MAX_PATH * 2] = {}; DWORD sz = sizeof buf;
+    if (!voteTesting() && RegGetValueW(HKEY_CURRENT_USER, kVoteReg, L"VotesFile", RRF_RT_REG_SZ, nullptr, buf, &sz) == ERROR_SUCCESS && buf[0]) return buf;
+    return voteDir() + L"\\wavelet-votes.txt";
+  }
+  // the path as shown: "Documents\..." for a file in the Documents folder
+  std::wstring voteShortPath() const {
+    wchar_t d[MAX_PATH] = {};
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PERSONAL, nullptr, 0, d)) && d[0]) {
+      const size_t n = wcslen(d);
+      if (vPath.size() > n && _wcsnicmp(vPath.c_str(), d, n) == 0 && vPath[n] == L'\\') return L"Documents" + vPath.substr(n);
+    }
+    return vPath;
+  }
+  static bool isVotesFile(const std::wstring& path) {   // a file this session may read and rewrite
+    FILE* f = _wfopen(path.c_str(), L"rb");
+    if (!f) return false;
+    char head[64] = {}; const size_t n = std::fread(head, 1, sizeof head - 1, f); std::fclose(f);
+    return n >= 39 && std::strncmp(head, "Wavelet Synthesizer TEST - preset votes", 39) == 0;
+  }
+  static std::string jsNum(double v) {   // as JavaScript prints +v.toFixed(6)
+    char b[64]; std::snprintf(b, sizeof b, "%.6f", v);
+    std::string s = b;
+    while (!s.empty() && s.back() == '0') s.pop_back();
+    if (!s.empty() && s.back() == '.') s.pop_back();
+    return s == "-0" ? "0" : s;
+  }
+
+  // ---- votes file (read at the start of a session, rewritten after every vote or change)
+  void voteLoad() {
+    vVotes.assign(vList.size(), -1); vChanges.assign(vList.size(), {});
+    FILE* f = _wfopen(vPath.c_str(), L"rb");
+    if (!f) return;
+    std::string all; char buf[4096]; size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) all.append(buf, n);
+    std::fclose(f);
+    auto entry = [&](const std::string& line) -> int {   // "NNN..." -> vList entry, or -1
+      if (line.size() < 4 || !isdigit((unsigned char)line[0]) || !isdigit((unsigned char)line[1]) || !isdigit((unsigned char)line[2])) return -1;
+      for (size_t k = 0; k < vList.size(); k++) if (line.compare(0, 3, vNum((int)k)) == 0) return (int)k;
+      return -1;
+    };
+    bool inChanges = false; int cur = -1;
+    for (size_t p = 0; p < all.size();) {
+      size_t e = all.find('\n', p); if (e == std::string::npos) e = all.size();
+      std::string line = all.substr(p, e - p); p = e + 1;
+      if (!line.empty() && line.back() == '\r') line.pop_back();
+      if (line.rfind("PRESET CHANGES", 0) == 0) { inChanges = true; continue; }
+      if (!inChanges) {   // "001 |  7 | yes     | A · Deep Saw Bass"
+        int k = entry(line), v;
+        if (k >= 0 && line.compare(3, 2, " |") == 0 && std::sscanf(line.c_str() + 5, "%d", &v) == 1 && v >= 0 && v <= 10) vVotes[k] = v;
+      } else if (line.compare(0, 2, "  ") == 0 && cur >= 0) {   // "  f_cutoff: 7 -> 5.5   (Cutoff: ... -> ...)"
+        size_t c = line.find(':');
+        double a, b;
+        if (c == std::string::npos || std::sscanf(line.c_str() + c + 1, " %lf -> %lf", &a, &b) != 2) continue;
+        std::string key = line.substr(2, c - 2);
+        for (int i = 0; i < kNumParams; i++) if (key == kParams[i].key && !kParams[i].hidden) { vChanges[cur].push_back(VChange{i, a, b}); break; }
+      } else if (line.size() > 7 && line.compare(3, 4, " \xC2\xB7 ") == 0) cur = entry(line);   // "012 · A · ...   (8 stars)"
+    }
+  }
+  std::string voteText() const {
+    std::string s; char b[512];
+    auto L = [&](const std::string& x) { s += x; s += "\r\n"; };
+    SYSTEMTIME t; GetLocalTime(&t);
+    L("Wavelet Synthesizer TEST - preset votes (0 stars = bad ... 10 stars = excellent)");
+    L("Listening: Beethoven, Appassionata (III), 5 s from 0:13 of the demo; each preset played polyphonic at its normal octave. Voted in the VST plug-in.");
+    std::snprintf(b, sizeof b, "Saved: %04d-%02d-%02d %02d:%02d   Votes: %d / %d   Presets with a recorded change: %d",
+                  t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, vVoted(), (int)vList.size(), vChanged());
+    L(b);
+    L("");
+    L("NUMBER | STARS | CHANGED | PRESET");
+    for (size_t k = 0; k < vList.size(); k++) {
+      std::string st = vVotes[k] >= 0 ? (vVotes[k] < 10 ? " " : "") + std::to_string(vVotes[k]) : " -";
+      L(vNum((int)k) + " | " + st + " | " + (vChanges[k].empty() ? "       " : "yes    ") + " | " + (kPresets[vList[k]].name + 7));
+    }
+    L("");
+    L("RANKING (best first)");
+    std::vector<int> order;
+    for (size_t k = 0; k < vList.size(); k++) if (vVotes[k] >= 0) order.push_back((int)k);
+    std::stable_sort(order.begin(), order.end(), [&](int a, int c) { return vVotes[a] > vVotes[c]; });
+    for (int k : order)
+      L((vVotes[k] < 10 ? " " : "") + std::to_string(vVotes[k]) + " | " + kPresets[vList[k]].name + (vChanges[k].empty() ? "" : "   (changed)"));
+    L("");
+    L("PRESET CHANGES (recorded by the player: apply them to the preset)");
+    L("Format: parameter key: value in the preset -> new value   (name: shown value -> new shown value)");
+    if (!vChanged()) L("(none)");
+    for (size_t k = 0; k < vList.size(); k++) {
+      if (vChanges[k].empty()) continue;
+      L("");
+      L(std::string(kPresets[vList[k]].name) + "   (" + (vVotes[k] >= 0 ? std::to_string(vVotes[k]) + " stars" : std::string("not voted")) + ")");
+      for (const VChange& c : vChanges[k]) {
+        const ParamDef& p = kParams[c.param];
+        L(std::string("  ") + p.key + ": " + jsNum(c.from) + " -> " + jsNum(c.to) + "   (" + p.name + ": " + formatValue(p, c.from) + " -> " + formatValue(p, c.to) + ")");
+      }
+    }
+    return s;
+  }
+  bool voteSave() {
+    const size_t slash = vPath.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) { vStatus = vSaveErr = L"NOT SAVED: no folder for the votes file (choose one with \u201CChange file\u2026\u201D)."; return false; }
+    CreateDirectoryW(vPath.substr(0, slash).c_str(), nullptr);   // Documents\Wavelet Synthesizer TEST, the first time
+    const std::wstring& path = vPath; const std::wstring tmp = path + L".tmp";
+    const std::string s = voteText();
+    FILE* f = _wfopen(tmp.c_str(), L"wb");
+    bool ok = f != nullptr;
+    if (f) { ok = std::fwrite(s.data(), 1, s.size(), f) == s.size(); ok = std::fclose(f) == 0 && ok; }
+    if (ok) ok = MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+    if (!ok) { DeleteFileW(tmp.c_str()); vStatus = vSaveErr = L"NOT SAVED: could not write " + path + L" (open in another program?)"; }
+    else vSaveErr.clear();
+    return ok;
+  }
+  // "Change file…": the votes file elsewhere (remembered). An existing votes file continues where it stopped; a new
+  // file receives the votes so far.
+  void voteChooseFile() {
+    wchar_t buf[MAX_PATH * 2] = {};
+    wcsncpy(buf, vPath.c_str(), MAX_PATH * 2 - 1);
+    OPENFILENAMEW o{};
+    o.lStructSize = sizeof o; o.hwndOwner = GetAncestor(hwnd, GA_ROOT);
+    o.lpstrFilter = L"Votes file (*.txt)\0*.txt\0"; o.lpstrFile = buf; o.nMaxFile = MAX_PATH * 2; o.lpstrDefExt = L"txt";
+    o.lpstrTitle = L"Votes file: where to save the votes (an existing votes file continues where you stopped)";
+    o.Flags = OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_HIDEREADONLY;
+    if (!GetSaveFileNameW(&o)) return;
+    const std::wstring path = buf;
+    const bool exists = GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+    if (exists && !isVotesFile(path)) {
+      MessageBoxW(hwnd, L"This file is not a votes file of Wavelet Synthesizer TEST: it is left untouched.\n"
+                  L"Choose a new file name, or an existing votes file.", L"Wavelet Synthesizer TEST", MB_OK | MB_ICONINFORMATION);
+      return;
+    }
+    vPath = path;
+    if (!voteTesting())
+      RegSetKeyValueW(HKEY_CURRENT_USER, kVoteReg, L"VotesFile", REG_SZ, vPath.c_str(), (DWORD)((vPath.size() + 1) * sizeof(wchar_t)));
+    if (exists) voteLoad(); else voteSave();
+    voteStartScreen();
+  }
+  void voteOpenFile() {
+    const std::wstring& path = vPath;
+    if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) { vStatus = L"No votes file yet: it is written after the first vote."; voteInvalidate(); return; }
+    ShellExecuteW(nullptr, L"open", L"explorer.exe", (L"/select,\"" + path + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
+  }
+
+  // ---- phases
+  std::shared_ptr<SharedState> voteAudio() { return host->sharedState(); }
+  std::wstring voteFileLabel() const {
+    if (!vSaveErr.empty()) return vSaveErr;
+    return L"Saved after every vote (" + std::to_wstring(vVoted()) + L" voted): " + voteShortPath();
+  }
+  std::wstring voteNote(int k) const {
+    if (vVotes[k] < 0) return L"";
+    return L"Already voted: " + std::to_wstring(vVotes[k]) + L" stars" + (vChanges[k].empty() ? L"" : L", change recorded") + L". ";
+  }
+  void voteShow(int phase, std::vector<VBtn> btns) {
+    vPhase = phase; vBtns = std::move(btns); vHover = -1;
+    if (hwnd) InvalidateRect(hwnd, nullptr, FALSE);
+  }
+  void voteBegin() {
+    if (vPhase != V_OFF || vList.empty()) return;
+    vPath = voteRememberedPath(); vSaveErr.clear();
+    voteLoad();
+    currentParams(vSaved); vSavedPreset = host->presetIndex(); vSavedDirty = host->presetDirty();
+    voteStartScreen();
+  }
+  void voteStartScreen() {
+    const int done = vVoted(), next = vNextFree(), n = (int)vList.size();
+    vTitle = L"LISTEN AND VOTE · " + std::to_wstring(n) + L" NEW PRESETS";
+    vName = done ? std::to_wstring(done) + L" of " + std::to_wstring(n) + L" presets voted" : std::to_wstring(n) + L" new presets to vote on";
+    vDesc = L"Each preset plays 5 s of Beethoven (Appassionata, the busy passage at 0:13), then vote from 0 (bad) to 10 stars "
+            L"(excellent). Above 5 stars you can modify the preset and record the change.";
+    vProgress = (float)done / n;
+    std::vector<VBtn> b;
+    if (next < n) b.push_back({done ? L"Continue at " + toW(vNum(next)) : L"Start at 001", [this, next] { votePlay(next); }, true, {}});
+    if (done) b.push_back({L"Restart at 001", [this] { votePlay(0); }, false, {}});
+    b.push_back({L"Change file\u2026", [this] { voteChooseFile(); }, false, {}});
+    if (GetFileAttributesW(vPath.c_str()) != INVALID_FILE_ATTRIBUTES) b.push_back({L"Show file", [this] { voteOpenFile(); }, false, {}});
+    if (done) b.push_back({L"Clear votes", [this] {
+      if (MessageBoxW(hwnd, L"Clear all your votes and recorded changes?", L"Wavelet Synthesizer TEST", MB_YESNO | MB_ICONQUESTION) != IDYES) return;
+      vVotes.assign(vList.size(), -1); vChanges.assign(vList.size(), {});
+      voteSave(); voteStartScreen();
+    }, false, {}});
+    b.push_back({L"Close", [this] { voteStop(); }, false, {}});
+    vStatus = voteAudio() ? voteFileLabel() : L"The audio part of the plug-in is not connected: the passage cannot play.";
+    voteShow(V_START, std::move(b));
+  }
+  // loads preset k with the same playing rules as the demo's preset tour (polyphonic, normal octave, no glide, short
+  // attacks, short echoes) and plays the passage once its sound is ready
+  void votePlay(int k) {
+    if (k >= (int)vList.size()) { voteFinish(); return; }
+    vK = std::max(0, k);
+    const int pk = vList[vK];
+    if (auto sh = voteAudio()) sh->seqStop.store(2);   // no tail of the previous preset
+    host->loadPreset(pk);
+    host->setPlainGesture(P_V_VOICES, 16); host->setPlainGesture(P_V_OCT, 0); host->setPlainGesture(P_V_GLIDE, 0);
+    if (plainOf(P_AMP_A) > 0.08) host->setPlainGesture(P_AMP_A, 0.08);
+    if (plainOf(P_FX_DMIX) > 0.1) host->setPlainGesture(P_FX_DMIX, 0.1);
+    if (plainOf(P_FX_DFB) > 0.3) host->setPlainGesture(P_FX_DFB, 0.3);
+    host->setPresetShown(pk, false);
+    vT0 = GetTickCount64(); vSent = false; vProgress = 0;
+    vTitle = L"PRESET " + std::to_wstring(vK + 1) + L" OF " + std::to_wstring(vList.size()) + L" · " + toW(kPresets[pk].cat + 7);
+    vName = toW(kPresets[pk].name);
+    vDesc = L"Playing… " + toW(kPresetDesc[pk]);
+    vStatus = voteNote(vK);
+    if (vStatus.empty()) vStatus = voteFileLabel();
+    voteShow(V_PLAY, {{L"Stop", [this] { voteStop(); }, false, {}}});
+  }
+  void voteTick() {
+    if (vPhase != V_PLAY) return;
+    auto sh = voteAudio();
+    const ULONGLONG el = GetTickCount64() - vT0;
+    if (!vSent && el >= (ULONGLONG)(kLead * 1000)) { if (sh) vSeqId = sh->seqStart.fetch_add(1) + 1; vSent = true; }
+    const float t = sh && vSent ? sh->seqTime.load() : -1.0f;
+    const bool done = vSent && sh && sh->seqDone.load() == vSeqId;
+    const float prog = done ? 1.0f : t >= 0 ? (float)std::min(1.0, t / kVotePassageLen) : vProgress;
+    if (prog != vProgress) { vProgress = prog; invalidateLogical(R{kVoteCard.x + 18, kVoteCard.y + 98, kVoteCard.w - 36, 8}); }
+    if (done) voteAsk();
+    else if (el > (ULONGLONG)(1000 * (kLead + kVotePassageLen + 4))) {   // no audio (host engine stopped?)
+      voteAsk();
+      vStatus = L"The passage did not play: is the audio engine of the host running?";
+    }
+  }
+  void voteAsk() {
+    if (auto sh = voteAudio()) sh->seqStop.store(1);   // the passage has ended: its last notes are released
+    const int pk = vList[vK];
+    vDesc = kPresetDesc[pk][0] ? toW(kPresetDesc[pk]) : L"How do you like this preset?";
+    vStatus = voteNote(vK) + L"Vote 0–10 (you can also play your MIDI keyboard to try the preset).";
+    voteShow(V_VOTE, {{L"▶ Replay", [this] { votePlay(vK); }, true, {}}, {L"◀ Previous", [this] { votePlay(vK - 1); }, false, {}},
+                      {L"Skip", [this] { votePlay(vK + 1); }, false, {}},
+                      {L"Save now", [this] { if (voteSave()) vStatus = L"Saved now (" + std::to_wstring(vVoted()) + L" voted): " + voteShortPath(); voteInvalidate(); }, false, {}},
+                      {L"Stop", [this] { voteStop(); }, false, {}}});
+  }
+  void voteCast(int n) {
+    vVotes[vK] = n;
+    voteSave();
+    if (n > kAskAbove) {
+      vDesc = L"You gave " + std::to_wstring(n) + L" stars. Do you want to modify this preset? You will change the panel with the mouse "
+              L"and play it on your MIDI keyboard, then keep the initial settings or record the change.";
+      vStatus = L"";
+      voteShow(V_ASK, {{L"Yes, modify it", [this] { voteEdit(); }, true, {}}, {L"No, next preset", [this] { votePlay(vK + 1); }, false, {}},
+                       {L"Stop", [this] { voteStop(); }, false, {}}});
+    } else votePlay(vK + 1);
+  }
+  // the preset exactly as designed (without the listening rules), with the change recorded before if any
+  void voteEdit() {
+    if (auto sh = voteAudio()) sh->seqStop.store(2);
+    const int pk = vList[vK];
+    double v[kNumParams];
+    for (int i = 0; i < kNumParams; i++) v[i] = kPresets[pk].v[i];
+    for (const VChange& c : vChanges[vK]) v[c.param] = c.to;
+    host->setSound(v, pk, !vChanges[vK].empty());
+    vTitle = L"MODIFY " + toW(kPresets[pk].name);
+    vDesc = L"Change the sound on the panel with the mouse, play it on your MIDI keyboard. Loaded as designed" +
+            std::wstring(vChanges[vK].empty() ? L"." : L", with your recorded change.");
+    vStatus = L"";
+    voteShow(V_EDIT, {{L"▶ Play the passage", [this] { if (auto sh = voteAudio()) sh->seqStart.fetch_add(1); }, false, {}},
+                      {L"Keep initial settings", [this] { vChanges[vK].clear(); voteSave(); votePlay(vK + 1); }, false, {}},
+                      {L"Record preset change", [this] { voteRecord(); }, true, {}},
+                      {L"Stop", [this] { voteStop(); }, false, {}}});
+  }
+  void voteRecord() {
+    const int pk = vList[vK];
+    std::vector<VChange> ch;
+    for (int i = 0; i < kNumParams; i++) {
+      const ParamDef& p = kParams[i];
+      if (p.hidden || i == P_ENGINE) continue;   // ENGINE only chooses the panel shown
+      const double base = kPresets[pk].v[i], cur = plainOf(i);
+      if (std::fabs(toNorm(p, cur) - toNorm(p, base)) > 1e-6) ch.push_back(VChange{i, base, cur});
+    }
+    if (ch.empty()) { vStatus = L"Nothing has changed yet: turn a knob, or choose “Keep initial settings”."; voteInvalidate(); return; }
+    vChanges[vK] = ch;
+    voteSave();
+    votePlay(vK + 1);
+  }
+  void voteFinish() {
+    if (auto sh = voteAudio()) sh->seqStop.store(1);
+    vTitle = L"LISTEN AND VOTE · FINISHED";
+    vName = std::to_wstring(vVoted()) + L" of " + std::to_wstring(vList.size()) + L" presets voted — thank you!";
+    std::vector<int> order;
+    for (size_t k = 0; k < vList.size(); k++) if (vVotes[k] >= 0) order.push_back((int)k);
+    std::stable_sort(order.begin(), order.end(), [&](int a, int c) { return vVotes[a] > vVotes[c]; });
+    vDesc.clear();
+    for (size_t i = 0; i < order.size() && i < 5; i++) vDesc += (i ? L", " : L"Your top 5: ") + toW(vNum(order[i])) + L" (" + std::to_wstring(vVotes[order[i]]) + L")";
+    vDesc += (vDesc.empty() ? L"" : L". ") + std::to_wstring(vChanged()) + L" preset change(s) recorded.";
+    vProgress = 1;
+    vStatus = voteFileLabel();
+    voteShow(V_END, {{L"Show the votes file", [this] { voteOpenFile(); }, true, {}}, {L"Back to the start", [this] { voteStartScreen(); }, false, {}},
+                     {L"Close", [this] { voteStop(); }, false, {}}});
+  }
+  // ends the session and gives back the sound played before it
+  void voteStop() {
+    if (vPhase == V_OFF) return;
+    if (auto sh = voteAudio()) sh->seqStop.store(2);
+    vPhase = V_OFF; vBtns.clear(); vHover = -1;
+    host->setSound(vSaved, vSavedPreset, vSavedDirty);
+    if (hwnd) { InvalidateRect(hwnd, nullptr, FALSE); onTimer(); }
+  }
+
+  // ---- window
+  void voteInvalidate() { if (vPhase != V_OFF) invalidateLogical(vPhase == V_EDIT ? kVoteBar : kVoteCard); }
+  R voteStar(int n) const {
+    const float w = (kVoteCard.w - 36 - 10 * 5) / 11;
+    return R{kVoteCard.x + 18 + n * (w + 5), kVoteCard.y + 112, w, 46};
+  }
+  int voteHit(float x, float y) const {
+    if (kVoteBtn.has(x, y)) return 200;
+    if (vPhase == V_OFF) return -1;
+    for (size_t i = 0; i < vBtns.size(); i++) if (vBtns[i].r.has(x, y)) return (int)i;
+    if (vPhase == V_VOTE) for (int n = 0; n <= 10; n++) if (voteStar(n).has(x, y)) return 100 + n;
+    return -1;
+  }
+  void voteClick(float x, float y) {
+    const int h = voteHit(x, y);
+    if (h >= 0 && h < (int)vBtns.size()) { auto fn = vBtns[h].fn; fn(); }
+    else if (h >= 100 && h <= 110 && vPhase == V_VOTE) voteCast(h - 100);
+  }
+  void textWrap(G::Graphics& g, const std::wstring& s, R r, float px, G::Color c) {
+    G::StringFormat f;
+    f.SetAlignment(G::StringAlignmentNear); f.SetLineAlignment(G::StringAlignmentNear); f.SetTrimming(G::StringTrimmingEllipsisWord);
+    G::SolidBrush b(c);
+    g.DrawString(s.c_str(), -1, font(px, false), G::RectF(r.x, r.y, r.w, r.h), &f, &b);
+  }
+  void textFit(G::Graphics& g, const std::wstring& s, R r, float px, G::Color c) {   // one line, shortened with "…" (a path keeps its end)
+    G::StringFormat f;
+    f.SetAlignment(G::StringAlignmentNear); f.SetLineAlignment(G::StringAlignmentCenter);
+    f.SetFormatFlags(G::StringFormatFlagsNoWrap); f.SetTrimming(G::StringTrimmingEllipsisPath);
+    G::SolidBrush b(c);
+    g.DrawString(s.c_str(), -1, font(px, false), G::RectF(r.x, r.y, r.w, r.h), &f, &b);
+  }
+  void starShape(G::Graphics& g, float cx, float cy, float r, G::Color c) {
+    G::PointF p[10];
+    for (int k = 0; k < 10; k++) {
+      const double a = PI * k / 5, rr = k % 2 ? r * 0.45 : r;
+      p[k] = G::PointF(cx + (float)(rr * std::sin(a)), cy - (float)(rr * std::cos(a)));
+    }
+    G::SolidBrush b(c); g.FillPolygon(&b, p, 10);
+  }
+  void voteButtons(G::Graphics& g, float x, float y, float h) {
+    for (size_t i = 0; i < vBtns.size(); i++) {
+      VBtn& b = vBtns[i];
+      G::RectF bound; G::StringFormat f; f.SetFormatFlags(G::StringFormatFlagsNoWrap);
+      g.MeasureString(b.label.c_str(), -1, font(12, b.main), G::PointF(0, 0), &f, &bound);
+      b.r = R{x, y, bound.Width + 24, h};
+      const bool hot = vHover == (int)i;
+      G::SolidBrush bg(hot ? rgb(0x262c35) : rgb(0x1d2129)); fillRR(g, b.r, 6, bg);
+      strokeRR(g, R{b.r.x + 0.5f, b.r.y + 0.5f, b.r.w - 1, b.r.h - 1}, 6, b.main || hot ? rgb(kAccentA) : rgb(0x343b47));
+      text(g, b.label, b.r, 12, b.main, b.main ? rgb(kAccentA) : rgb(0xe9edf2));
+      x += b.r.w + 8;
+    }
+  }
+  void drawVote(G::Graphics& g) {
+    // the VOTE button (lit while the session runs; a click stops it)
+    const bool run = vPhase != V_OFF, hotBtn = vHover == 200;
+    if (vPhase != V_OFF && vPhase != V_EDIT) { G::SolidBrush dim(G::Color(150, 0, 0, 0)); g.FillRectangle(&dim, 0.f, 0.f, kDeviceW, kDeviceH); }
+    {
+      G::SolidBrush bg(run || hotBtn ? rgb(kAccentA) : rgb(kInset)); fillRR(g, kVoteBtn, 8, bg);
+      strokeRR(g, R{kVoteBtn.x + 0.5f, kVoteBtn.y + 0.5f, kVoteBtn.w - 1, kVoteBtn.h - 1}, 8, rgb(kAccentA));
+      text(g, run ? L"STOP" : L"VOTE", kVoteBtn, 10.5f, true, run || hotBtn ? rgb(0x0d1014) : rgb(kAccentA));
+    }
+    if (vPhase == V_OFF) return;
+    if (vPhase == V_EDIT) {
+      const R b = kVoteBar;
+      G::SolidBrush bg(rgb(0x0d1014, 250)); fillRR(g, b, 10, bg);
+      strokeRR(g, R{b.x + 0.5f, b.y + 0.5f, b.w - 1, b.h - 1}, 10, rgb(kStar));
+      text(g, vTitle, R{b.x + 14, b.y + 6, b.w - 28, 18}, 12.5f, true, rgb(kStar), 0);
+      text(g, vDesc, R{b.x + 14, b.y + 24, b.w - 28, 16}, 11, false, rgb(0x9aa3b0), 0);
+      voteButtons(g, b.x + 14, b.y + 44, 26);
+      textFit(g, vStatus, R{b.x + 14, b.y + 74, b.w - 28, 16}, 11, vSaveErr.empty() ? rgb(kStar) : rgb(0xff5d5d));
+      return;
+    }
+    const R c = kVoteCard;
+    G::SolidBrush bg(rgb(0x0d1014, 248)); fillRR(g, c, 12, bg);
+    strokeRR(g, R{c.x + 0.5f, c.y + 0.5f, c.w - 1, c.h - 1}, 12, rgb(kAccentA));
+    text(g, vTitle, R{c.x + 18, c.y + 10, c.w - 36, 18}, 11, true, rgb(kAccentA), 0);
+    text(g, vName, R{c.x + 18, c.y + 30, c.w - 36, 26}, 19, true, rgb(0xe9edf2), 0);
+    textWrap(g, vDesc, R{c.x + 18, c.y + 60, c.w - 36, 36}, 12, rgb(0x9aa3b0));
+    G::SolidBrush track(rgb(0x262c35)); g.FillRectangle(&track, c.x + 18, c.y + 100, c.w - 36, 4.f);
+    if (vProgress > 0) { G::SolidBrush pb(rgb(kAccentA)); g.FillRectangle(&pb, c.x + 18, c.y + 100, (c.w - 36) * std::min(1.0f, vProgress), 4.f); }
+    const bool starsOn = vPhase == V_VOTE;
+    const int cur = (vPhase == V_PLAY || vPhase == V_VOTE || vPhase == V_ASK) ? vVotes[vK] : -1;
+    for (int n = 0; n <= 10; n++) {
+      const R s = voteStar(n);
+      const bool lit = n == cur || (starsOn && vHover == 100 + n);
+      const int a = starsOn || n == cur ? 255 : 90;
+      G::SolidBrush sb(lit ? rgb(kStar, a) : rgb(0x1d2129, a)); fillRR(g, s, 8, sb);
+      strokeRR(g, R{s.x + 0.5f, s.y + 0.5f, s.w - 1, s.h - 1}, 8, rgb(0x343b47, a));
+      const G::Color fg = lit ? rgb(0x0d1014, a) : rgb(kStar, a), sub = lit ? rgb(0x0d1014, a) : rgb(0x9aa3b0, a);
+      text(g, std::to_wstring(n), R{s.x, s.y + 4, s.w, 22}, 17, true, fg);
+      if (n == 0 || n == 10) text(g, n == 0 ? L"bad" : L"excellent", R{s.x, s.y + 28, s.w, 13}, 9, false, sub);
+      else starShape(g, s.x + s.w / 2, s.y + 34, 5.5f, fg);
+    }
+    voteButtons(g, c.x + 18, c.y + 170, 28);
+    textFit(g, vStatus, R{c.x + 18, c.y + 206, c.w - 36, 16}, 11.5f, vSaveErr.empty() ? rgb(0x9aa3b0) : rgb(0xff5d5d));
+    text(g, L"Every vote is saved at once: stop when you like, VOTE \u2192 Continue picks up where you stopped.", R{c.x + 18, c.y + 230, c.w - 36, 16}, 10.5f, false, rgb(0x6f7885), 0);
+  }
+
   static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     Editor* e = (Editor*)GetWindowLongPtrW(h, GWLP_USERDATA);
     if (!e) return DefWindowProcW(h, msg, wp, lp);
@@ -982,7 +1454,11 @@ class Editor : public IPlugView, public IPlugViewContentScaleSupport {
       case WM_MOUSEMOVE: e->logical(lp, x, y); e->mouseMove(x, y); return 0;
       case WM_LBUTTONUP: e->mouseUp(); return 0;
       case WM_CAPTURECHANGED: if ((HWND)lp != h) e->mouseUp(); return 0;
-      case WM_MOUSELEAVE: e->tracking = false; if (e->drag < 0 && e->hover >= 0) { int o = e->hover; e->hover = -1; e->invalidateItem(o); } return 0;
+      case WM_MOUSELEAVE:
+        e->tracking = false;
+        if (e->drag < 0 && e->hover >= 0) { int o = e->hover; e->hover = -1; e->invalidateItem(o); }
+        if (e->vHover >= 0) { e->vHover = -1; e->invalidateLogical(kVoteBtn); e->voteInvalidate(); }
+        return 0;
       case WM_MOUSEWHEEL: {
         POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}; ScreenToClient(h, &pt);
         double s = e->scale(); int idx = e->hit((float)(pt.x / s), (float)(pt.y / s));

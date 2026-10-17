@@ -26,6 +26,7 @@
 #include "pluginterfaces/vst/vstspeaker.h"
 #include "pluginterfaces/vst/vsttypes.h"
 #include "common.h"
+#include "generated/vote_data.h"
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -384,9 +385,20 @@ class Processor : public IComponent, public IAudioProcessor, public IConnectionP
         else if (e.vel == 0) engine.noteOff(e.note);
         else engine.noteOn(e.note, e.vel / 127.0);
       }
+      // TEST BUILD: the voting session's passage (commands from the editor)
+      const int stop = shared->seqStop.exchange(0);
+      if (stop) {
+        seqRelease();
+        if (stop == 2) engine.allSoundOff();
+        seqI = -1; seqWait = false; shared->seqTime.store(-1);
+      }
+      const uint32_t st = shared->seqStart.load();
+      if (st != seqSeen) { seqSeen = st; seqRelease(); seqI = 0; seqPos = 0; seqWait = true; shared->seqTime.store(-1); }
+      // it starts once the sound of the preset just loaded is ready (its tables built and in use)
+      if (seqWait && structVersion.load() == builtVersion.load() && pendingIdx.load() < 0) seqWait = false;
     }
 
-    // 4. audio with sample-accurate note events
+    // 4. audio with sample-accurate note events (from the host, and the voting session's passage)
     const int32 ns = data.numSamples;
     float* L = nullptr; float* R = nullptr;
     if (data.numOutputs > 0 && data.outputs && data.outputs[0].numChannels > 0 && ns > 0) {
@@ -399,17 +411,39 @@ class Processor : public IComponent, public IAudioProcessor, public IConnectionP
     }
     IEventList* events = data.inputEvents;
     int32 ne = events ? events->getEventCount() : 0;
-    int32 pos = 0;
-    for (int32 i = 0; i < ne; i++) {
+    const bool seqOn = seqI >= 0 && !seqWait;
+    int32 pos = 0, hi = 0;
+    for (;;) {
+      // the next host event and the next passage event: the earlier first (the passage first on the same sample)
       Event e{};
-      if (events->getEvent(i, e) != kResultOk) continue;
-      int32 off = std::max(0, std::min(ns, e.sampleOffset));
+      int32 hOff = INT32_MAX, sOff = INT32_MAX;
+      while (hi < ne && events->getEvent(hi, e) != kResultOk) hi++;
+      if (hi < ne) hOff = std::max(0, std::min(ns, e.sampleOffset));
+      if (seqOn && seqI < kVotePassageN) {
+        const int64_t t = std::llround(kVotePassage[seqI].t * engine.sr) - seqPos;
+        if (t < ns) sOff = (int32)std::max<int64_t>(0, t);
+      }
+      if (hOff == INT32_MAX && sOff == INT32_MAX) break;
+      const int32 off = std::min(hOff, sOff);
       if (L && off > pos) { engine.process(L + pos, R + pos, off - pos); pos = off; }
-      if (e.type == Event::kNoteOnEvent) engine.noteOn(e.noteOn.pitch, e.noteOn.velocity);
-      else if (e.type == Event::kNoteOffEvent) engine.noteOff(e.noteOff.pitch);
+      if (sOff <= hOff) {
+        const VoteEv& v = kVotePassage[seqI++];
+        // the same pitch can be held twice by the score: it is released on its last note-off
+        if (v.vel > 0) { seqCount[v.note]++; engine.noteOn(v.note, v.vel); }
+        else if (seqCount[v.note] > 0 && --seqCount[v.note] == 0) engine.noteOff(v.note);
+      } else {
+        if (e.type == Event::kNoteOnEvent) engine.noteOn(e.noteOn.pitch, e.noteOn.velocity);
+        else if (e.type == Event::kNoteOffEvent) engine.noteOff(e.noteOff.pitch);
+        hi++;
+      }
     }
     if (L && pos < ns) engine.process(L + pos, R + pos, ns - pos);
     if (L) data.outputs[0].silenceFlags = 0;
+    if (seqOn) {
+      seqPos += ns;
+      if (seqI >= kVotePassageN) { seqI = -1; shared->seqDone.store(seqSeen); shared->seqTime.store(-1); }
+      else shared->seqTime.store((float)(seqPos / engine.sr));
+    }
 
     // 5. recycle tables that are no longer referenced
     for (int k = 0; k < engine.nReleased; k++)
@@ -471,6 +505,14 @@ class Processor : public IComponent, public IAudioProcessor, public IConnectionP
   IConnectionPoint* peer = nullptr;
   std::shared_ptr<SharedState> shared;
   int64_t sharedId = 0;
+  // TEST BUILD: the voting session's passage (audio thread only)
+  uint32_t seqSeen = 0;          // the last seqStart number handled
+  int seqI = -1;                 // next event of kVotePassage, -1 = not playing
+  bool seqWait = false;          // waiting for the sound of the preset just loaded
+  int64_t seqPos = 0;            // samples played since its first note
+  uint8_t seqCount[128] = {};    // passage notes held per pitch
+
+  void seqRelease() { for (int n = 0; n < 128; n++) if (seqCount[n]) { seqCount[n] = 0; engine.noteOff(n); } }
 
   int claimFree() {
     for (int s = 0; s < kSets; s++) { int f = kFree; if (setState_[s].compare_exchange_strong(f, kBuilding)) return s; }
@@ -687,18 +729,25 @@ class Controller : public IEditController, public IConnectionPoint, public IMidi
   bool presetDirty() override { return dirty; }
   void loadPreset(int index) override {
     if (index < 0 || index >= kNumPresets) return;
+    setSound(kPresets[index].v, index, false);
+  }
+  void setPresetShown(int index, bool dt) override {
+    if (index >= 0 && index < kNumPresets) presetIdx = index;
+    dirty = dt; version++;
+  }
+  void setSound(const double* pv, int index, bool dt) override {
     IComponentHandler2* h2 = nullptr;
     if (handler) handler->queryInterface(IComponentHandler2::iid, (void**)&h2);
     if (h2) h2->startGroupEdit();
     for (int i = 0; i < kNumParams; i++) {
       if (kParams[i].hidden) continue;
-      double v = toNorm(kParams[i], kPresets[index].v[i]);
+      double v = toNorm(kParams[i], pv[i]);
       if (norm[i] == v) continue;
       norm[i] = v;
       if (handler) { handler->beginEdit(i); handler->performEdit(i, v); handler->endEdit(i); }
     }
     if (h2) { h2->finishGroupEdit(); h2->release(); }
-    presetIdx = index; dirty = false; version++;
+    setPresetShown(index, dt);
   }
   double zoom() override { return zoomFactor; }
   void setZoom(double z) override { zoomFactor = (float)z; }
