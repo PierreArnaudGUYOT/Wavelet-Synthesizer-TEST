@@ -11,6 +11,8 @@
   'use strict';
   const FORM = { url: 'https://docs.google.com/forms/d/e/1FAIpQLSdqkWNwanzcDDURcKepEK_U1P8b_HyR8B5_Gk48xtuQOYHqgQ/formResponse', report: 'entry.79964320', setup: 'entry.15088103' };
   const STORE = 'oktowave.rate.v1';
+  const LOOPS = 4;     // the owner: "chaque preset joue 4 fois sa boucle, ça me laissera plus de temps pour voter": each preset plays its phrase 4 times while it is rated
+  const TAIL = 0.12;   // s a note may ring past the end of its phrase (the next repeat starts with its own notes)
 
   // the new order: the start's presets under 5 change places with the second half's presets above 5, the best rated first
   function newOrder(orig, stars) {
@@ -47,6 +49,26 @@
 
     const result = () => newOrder(S.orig, S.stars);
     const sceneNow = () => { const st = demo.state(); return st.running && st.scene >= 0 ? st.scene : -1; };
+
+    // the piece with each preset's phrase played LOOPS times (the order of the tour, the same phrases as the demo): the notes that start in the phrase, cut TAIL past its end
+    const SONG = WS_DEMO_SONGS[0], PLAN = demo.tourPlan(ORIG);
+    const LOOPED = (() => {
+      const notes = [], scenes = [], blocks = [], n = SONG.notes;
+      let t = 0;
+      for (let k = 0; k < N; k++) {
+        const a = PLAN[k].chord, b = k + 1 < N ? PLAN[k + 1].chord : SONG.duration, len = b - a;
+        scenes.push({ chord: t, preset: ORIG[k] }); blocks.push({ start: t, len });
+        for (let r = 0; r < LOOPS; r++) {
+          for (let i = 0; i < n.length; i += 4) {
+            if (n[i] < a - 0.001 || n[i] >= b - 0.001) continue;
+            notes.push(+(t + n[i] - a).toFixed(4), +Math.max(0.03, Math.min(n[i + 1], b - n[i] + TAIL)).toFixed(4), n[i + 2], n[i + 3]);
+          }
+          t += len;
+        }
+      }
+      return { song: Object.assign({}, SONG, { notes, duration: t }), scenes, blocks };
+    })();
+    const loopNow = (k) => { const st = demo.state(); if (!st.running || k < 0) return 0; const b = LOOPED.blocks[k]; return Math.max(1, Math.min(LOOPS, 1 + Math.floor((st.time - b.start) / b.len))); };
 
     // ---------------------------------------------------------------- the report
     function report() {
@@ -87,8 +109,8 @@
     function watch(onEnd) {   // follows the demo: the part playing, and its end
       clearInterval(timer);
       timer = setInterval(() => {
-        const sc = sceneNow();
-        if (sc !== lastScene) { lastScene = sc; render(); }
+        const sc = sceneNow(), key = sc * 16 + (phase === 'playing' ? loopNow(sc) : 0);   // (a new part, or the next loop of the part: the bar says it)
+        if (key !== lastScene) { lastScene = key; render(); }
         if (!demo.running()) { clearInterval(timer); onEnd(); }
       }, 150);
     }
@@ -98,7 +120,7 @@
       if (restart) { S = fresh(); save(); sendStatus = ''; }
       if (!saved) saved = api.snapshot();
       phase = 'playing'; lastScene = -1; render();
-      await demo.start({ tour: ORIG });
+      await demo.start({ song: LOOPED.song, scenes: LOOPED.scenes });
       watch(() => { if (phase === 'playing') { phase = 'summary'; render(); } });
     }
     function rate(n, k) {   // k: the part (the one playing by default)
@@ -161,7 +183,7 @@
         // the owner: "un bouton revenir 5 s en arrière ... si je veux revenir sur ma décision" and "un bouton pause" (demo.js back / pause / resume)
         const ctl = `<button class="rate-b" data-act="back" title="5 seconds back: the part before plays again and its stars can be changed">&#9194; 5 s</button><button class="rate-b" data-act="pause">${demo.paused() ? '&#9654; Resume' : '&#10074;&#10074; Pause'}</button>`;
         bar.innerHTML = k < 0 ? `<span class="rate-lab">The demo starts&hellip;</span>${dots(-1)}<button class="rate-b" data-act="stop">Stop</button>`
-          : `<span class="rate-lab">Part ${k + 1} / ${N}<b>${esc(tourName(k))}</b></span>${starRow(k, true)}${ctl}${dots(k)}<button class="rate-b" data-act="stop">Stop</button>`;
+          : `<span class="rate-lab">Part ${k + 1} / ${N} &middot; loop ${loopNow(k)} / ${LOOPS}<b>${esc(tourName(k))}</b></span>${starRow(k, true)}${ctl}${dots(k)}<button class="rate-b" data-act="stop">Stop</button>`;
         return;
       }
       bar.style.display = 'none'; card.style.display = 'block';

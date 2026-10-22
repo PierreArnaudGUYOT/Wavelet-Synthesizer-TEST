@@ -175,13 +175,18 @@ function WSDemo(api) {
     st.raf = requestAnimationFrame(tick);
   }
 
+  // the scenes of a plan given with the piece (opts.song / opts.scenes: the rating build plays each phrase several times)
+  function scenesFrom(list) {
+    return list.map((s, k) => ({ t: k ? s.chord - TOUR_LEAD : 0, chord: s.chord, tour: true, preset: s.preset, pos: k, of: list.length }));
+  }
+
   // Plays Beethoven's Appassionata (III) as a tour of the presets.
   async function start(opts) {
     if (st) stop();
     await api.startAudio();
     if (!win) buildWindow();
-    const song = SONG;
-    const scenes = tourScenes(song, (opts && opts.tour) || WS_SPEC.TOUR);   // (opts.tour: another list of presets, the vote build's)
+    const song = (opts && opts.song) || SONG;   // (version 1.0.13: the rating build gives the piece with each phrase played several times, and its scenes)
+    const scenes = opts && opts.scenes ? scenesFrom(opts.scenes) : tourScenes(song, (opts && opts.tour) || WS_SPEC.TOUR);   // (opts.tour: another list of presets, the vote build's)
     const TUNING_KEYS = ['mt_mode', 'mt_scale', 'mt_tonic'], v0 = api.values();
     st = { song, scenes, saved: api.snapshot(), tuning: TUNING_KEYS.map(k => [k, v0[P[k]]]), scene: -1, t0: 0, raf: 0, sync: null, pre: 0, offset: 0, paused: null };   // (the tuning is a performance setting: a snapshot leaves it out, the demo gives it back)
     api.post({ t: 'alloff' });
