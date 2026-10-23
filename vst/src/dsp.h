@@ -2199,10 +2199,12 @@ class Engine {
       // the look-ahead limiter's gain (version 1.0.15): the gain this sample needs, its minimum over the last limH samples (a queue of increasing gains), the release,
       // the average over limB samples (exactly 1 while none of them is under 1)
       const double gq = ai > LIM_CEIL && ai < 1e9 ? LIM_CEIL / ai : 1;
+      // the oldest gain leaves the window BEFORE the new one comes in: the queue never holds more than limH (a long falling peak above the ceiling, a loud low square through
+      // the DC blocker, filled it to limH + 1 and wrote past the end of limQG / limQT)
+      if (qn > 0 && qT[qh] <= lt - limH) { qh = qh + 1 >= limH ? 0 : qh + 1; qn--; }
       while (qn > 0) { int b = qh + qn - 1; if (b >= limH) b -= limH; if (qG[b] >= gq) qn--; else break; }
       int e = qh + qn; if (e >= limH) e -= limH;
       qG[e] = gq; qT[e] = lt; qn++;
-      if (qT[qh] <= lt - limH) { qh = qh + 1 >= limH ? 0 : qh + 1; qn--; }
       lt++;
       const double hm = qG[qh];
       if (hm < env) env = hm;
@@ -2212,18 +2214,18 @@ class Engine {
       if (below == 0) { sum = limB; g = 1; } else { sum += env - old; g = sum / limB; }
       // the delay: the output stage works on the sample of limD samples ago
       const double dl = lL[lw], dr = lR[lw]; lL[lw] = l; lR[lw] = r; lw = lw + 1 >= limD ? 0 : lw + 1;
+      // Classic, the output stage of 1.0.14: the peak guard (beta 0.3.2), the gain that keeps the larger channel under GUARD_T before the soft limiter. It follows the delayed signal
+      // in both modes, so that switching OUTPUT finds it in step (no stale gain cut when Classic comes back)
+      const double aq = std::fabs(dl) > std::fabs(dr) ? std::fabs(dl) : std::fabs(dr), gT = aq > GUARD_T && aq < 1e9 ? GUARD_T / aq : 1;
+      if (gT < gdl) { gdl += (gT - gdl) * kGa; gHoldl = gHoldN; }
+      else if (gHoldl > 0) gHoldl--;
+      else if (gdl < 1) { gdl += (gT - gdl) * kGr; if (gT == 1 && 1 - gdl < 1e-9) gdl = 1; }
       if (limiter) {
         l = dl * g; r = dr * g;
         l = l > 1 ? 1 : l < -1 ? -1 : l == l ? l : 0;   // never reached by a finite input (the gain keeps it under LIM_CEIL): a safety net
         r = r > 1 ? 1 : r < -1 ? -1 : r == r ? r : 0;
       } else {
-        // Classic, the output stage of 1.0.14: the peak guard (beta 0.3.2), the gain that keeps the larger channel under GUARD_T before the soft limiter
-        l = dl; r = dr;
-        const double aq = std::fabs(l) > std::fabs(r) ? std::fabs(l) : std::fabs(r), gT = aq > GUARD_T && aq < 1e9 ? GUARD_T / aq : 1;
-        if (gT < gdl) { gdl += (gT - gdl) * kGa; gHoldl = gHoldN; }
-        else if (gHoldl > 0) gHoldl--;
-        else if (gdl < 1) { gdl += (gT - gdl) * kGr; if (gT == 1 && 1 - gdl < 1e-9) gdl = 1; }
-        l = softLimit(l * gdl); r = softLimit(r * gdl);
+        l = softLimit(dl * gdl); r = softLimit(dr * gdl);
       }
       if (!std::isfinite(l)) l = 0;
       if (!std::isfinite(r)) r = 0;

@@ -9,9 +9,18 @@ const path = require('path');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i >= 0 ? process.argv[i + 1] : d; };
 const ROOT = path.join(__dirname, '..'), OUTDIR = arg('out', '');
 if (!OUTDIR) { console.error('usage: node tools/make_test_copy.js --out <folder> [--ab]'); process.exit(1); }
-const out = path.resolve(OUTDIR);
+const out = path.resolve(OUTDIR), MARK = '.okto-test-copy';
+// safety: only a folder this tool made (it holds MARK) or an empty / missing one is replaced; never a repository, the sources or a folder that contains them
+const inside = (a, b) => { const r = path.relative(b, a); return r === '' || (!r.startsWith('..') && !path.isAbsolute(r)); };
+if (inside(path.resolve(ROOT), out) || inside(process.cwd(), out)) { console.error(`refused: ${out} contains the sources or the current folder`); process.exit(1); }
+if (fs.existsSync(out)) {
+  const items = fs.readdirSync(out);
+  if (items.includes('.git')) { console.error(`refused: ${out} is a git repository`); process.exit(1); }
+  if (items.length && !items.includes(MARK)) { console.error(`refused: ${out} is not empty and was not made by make_test_copy.js`); process.exit(1); }
+}
 fs.rmSync(out, { recursive: true, force: true });
 fs.cpSync(path.join(ROOT, 'web'), out, { recursive: true });
+fs.writeFileSync(path.join(out, MARK), 'made by tools/make_test_copy.js\n');
 if (process.argv.includes('--ab')) {
   fs.copyFileSync(path.join(__dirname, 'test_copy', 'ab_output.js'), path.join(out, 'js', 'ab_output.js'));
   const f = path.join(out, 'index.html'), html = fs.readFileSync(f, 'utf8');

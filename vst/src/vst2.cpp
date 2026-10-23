@@ -320,14 +320,15 @@ class Instance {
       comp->setActive(true);
       proc->setProcessing(true);
       scratch.assign((size_t)std::max(1, maxBlock) * 2, 0.0f);
+      active = true;   // (before the callback below: a host that suspends and resumes from inside it must find the plug-in active)
       // version 1.0.15: the look-ahead limiter's delay at this sample rate; a host that has seen another one is told so
       const int32_t delay = (int32_t)proc->getLatencySamples();
       if (delay != fx.initialDelay) { fx.initialDelay = delay; host(&fx, vst2::audioMasterIOChanged, 0, 0, nullptr, 0); }
-    } else {
-      proc->setProcessing(false);
-      comp->setActive(false);
+      return;
     }
-    active = on;
+    proc->setProcessing(false);
+    comp->setActive(false);
+    active = false;
   }
 
   void midi(const vst2::MidiEvent& m) {
@@ -480,7 +481,7 @@ class Instance {
     using namespace vst2;
     switch (op) {
       case effOpen: return 0;
-      case effSetSampleRate: if (opt >= kMinRate && opt <= kMaxRate) sampleRate = opt; return 0;   // real rates only
+      case effSetSampleRate: if (opt >= kMinRate && opt <= kMaxRate) { sampleRate = opt; fx.initialDelay = ws::limiterDelay(opt); } return 0;   // real rates only (1.0.15: the delay at that rate, ready before the resume)
       case effSetBlockSize: if (value > 0) maxBlock = (int32_t)value; return 0;
       case effMainsChanged: setActive(value != 0); return 0;
       case effSetProgram: setProgram((int)value); return 0;
