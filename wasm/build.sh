@@ -14,7 +14,8 @@ CXX="$SDK/bin/clang++.exe"
 [ -x "$CXX" ] || CXX="$SDK/bin/clang++"
 mkdir -p "$HERE/out"
 COMMON="--target=wasm32-wasip1 --sysroot=$SDK/share/wasi-sysroot -std=c++17 -O3 -ffp-contract=off -fno-exceptions -fno-rtti -mexec-model=reactor \
-  -Wl,--no-entry -Wl,--strip-all -Wl,-z,stack-size=262144 -Wl,--initial-memory=33554432"
+  -Wl,--no-entry -Wl,--strip-all -Wl,-z,stack-size=262144 -Wl,--initial-memory=134217728"
+# (128 MB from the start: the two table sets of the heaviest preset during their crossfade, 2 x 53 MB, fit without growing the memory on the audio thread)
 build() {   # $1 = name, $2 = extra flags
   "$CXX" $COMMON $2 "$HERE/engine_wasm.cpp" -o "$HERE/out/engine_$1.wasm"
   echo "engine_$1.wasm: $(wc -c < "$HERE/out/engine_$1.wasm") bytes"

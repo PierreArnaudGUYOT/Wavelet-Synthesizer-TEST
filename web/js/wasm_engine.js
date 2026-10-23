@@ -85,7 +85,7 @@ function WSWasmEngine(module, sr) {
     }
     return st.i >= st.ops.length;
   }
-  const PUMP = 1 << 19;   // floats copied per render quantum (2 MB)
+  const PUMP = 1 << 18;   // floats copied per render quantum: one set (1 MB) per quantum
   let stages = [];        // copies in progress or waiting for their setTables, oldest first
   const dropStage = (st) => { stages = stages.filter(z => z !== st); x.ws_bundle_free(st.b); };
   function commit(st) {
