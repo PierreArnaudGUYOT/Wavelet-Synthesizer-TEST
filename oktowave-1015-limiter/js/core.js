@@ -1629,10 +1629,12 @@ function WSCoreFactory(SPEC) {
       // the look-ahead limiter's gain (version 1.0.15): the gain this sample needs, its minimum over the last limH samples (a queue of increasing gains), the release,
       // the average over limB samples (exactly 1 while none of them is under 1)
       const gq = ai > LIM_CEIL && ai < 1e9 ? LIM_CEIL / ai : 1;
+      // the oldest gain leaves the window BEFORE the new one comes in: the queue never holds more than limH (a long falling peak above the ceiling, a loud low square through
+      // the DC blocker, filled it to limH + 1 and overran it)
+      if (qn > 0 && qT[qh] <= limT - limH) { qh = qh + 1 >= limH ? 0 : qh + 1; qn--; }
       while (qn > 0) { let b = qh + qn - 1; if (b >= limH) b -= limH; if (qG[b] >= gq) qn--; else break; }
       let e = qh + qn; if (e >= limH) e -= limH;
       qG[e] = gq; qT[e] = limT; qn++;
-      if (qT[qh] <= limT - limH) { qh = qh + 1 >= limH ? 0 : qh + 1; qn--; }
       limT++;
       const hm = qG[qh];
       if (hm < env) env = hm;
@@ -1642,18 +1644,18 @@ function WSCoreFactory(SPEC) {
       if (below === 0) { sum = limB; g = 1; } else { sum += env - old; g = sum / limB; }
       // the delay: the output stage works on the sample of limD samples ago
       const dl = limL[lw], dr = limR[lw]; limL[lw] = l; limR[lw] = r; lw = lw + 1 >= limD ? 0 : lw + 1;
+      // Classic, the output stage of 1.0.14: the peak guard (beta 0.3.2), the gain that keeps the larger channel under gT before the soft limiter. It follows the delayed signal in
+      // both modes, so that switching OUTPUT finds it in step (no stale gain cut when Classic comes back)
+      const aq = Math.abs(dl) > Math.abs(dr) ? Math.abs(dl) : Math.abs(dr), gT = aq > gGt && aq < 1e9 ? gGt / aq : 1;
+      if (gT < gd) { gd += (gT - gd) * kGa; gHold = gHoldN; }
+      else if (gHold > 0) gHold--;
+      else if (gd < 1) { gd += (gT - gd) * kGr; if (gT === 1 && 1 - gd < 1e-9) gd = 1; }
       if (limiter) {
         l = dl * g; r = dr * g;
         l = l > 1 ? 1 : l < -1 ? -1 : l === l ? l : 0;   // never reached by a finite input (the gain keeps it under LIM_CEIL): a safety net
         r = r > 1 ? 1 : r < -1 ? -1 : r === r ? r : 0;
       } else {
-        // Classic, the output stage of 1.0.14: the peak guard (beta 0.3.2), the gain that keeps the larger channel under gT before the soft limiter
-        l = dl; r = dr;
-        const aq = Math.abs(l) > Math.abs(r) ? Math.abs(l) : Math.abs(r), gT = aq > gGt && aq < 1e9 ? gGt / aq : 1;
-        if (gT < gd) { gd += (gT - gd) * kGa; gHold = gHoldN; }
-        else if (gHold > 0) gHold--;
-        else if (gd < 1) { gd += (gT - gd) * kGr; if (gT === 1 && 1 - gd < 1e-9) gd = 1; }
-        l = softLimit(l * gd); r = softLimit(r * gd);
+        l = softLimit(dl * gd); r = softLimit(dr * gd);
       }
       outL[o + i] = l; outR[o + i] = r;
       const al = Math.abs(l), ar = Math.abs(r);
