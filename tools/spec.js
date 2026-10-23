@@ -350,6 +350,11 @@ add('midi_anoff', 'All Notes Off (MIDI CC 123)', 'NOTES OFF', { min: 0, max: 1, 
 // (polyComp), now switchable to compare by ear. Two hidden performance settings (never in a preset), set by the test page of the web test copy.
 add('out_mode', 'Output Stage', 'OUTPUT', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 1, perf: true, hidden: true, choices: ['Classic', 'Limiter'], choiceShort: ['CLASSIC', 'LIMITER'] });
 add('poly_comp', 'Chord Compensation', 'CHORD COMP', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 1, perf: true, hidden: true, choices: ['Off', 'On'], choiceShort: ['OFF', 'ON'] });
+// Version 1.0.16 (web test): REVERB TYPE Hall, a feedback delay network in place of the Freeverb (Classic, unchanged and the default). For the owner's listening test they are global
+// hidden settings set by the test page (every preset with reverb plays the type chosen); their place on the panel, and whether they become a preset's own, come after his choice.
+add('fx_rtype', 'Reverb Type', 'TYPE', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 0, perf: true, hidden: true, choices: ['Classic', 'Hall'], choiceShort: ['CLASSIC', 'HALL'] });
+add('fx_rpre', 'Reverb Pre-delay', 'PRE', { curve: 'exp', fmt: 'sec', min: 0.001, max: 0.12, def: 0.02, perf: true, hidden: true });
+add('fx_rdamp', 'Reverb Damping', 'DAMP', { min: 0, max: 1, def: 0.5, perf: true, hidden: true });
 
 const DELAY_BEATS = DELAY_NOTES.map(noteBeats), LFO_BEATS = LFO_NOTES.map(noteBeats);
 for (const b of [DELAY_BEATS, LFO_BEATS]) for (let i = 1; i < b.length; i++)
