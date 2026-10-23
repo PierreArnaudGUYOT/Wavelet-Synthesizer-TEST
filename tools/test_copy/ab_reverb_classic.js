@@ -1,14 +1,14 @@
 // Copyright (C) 2026 Pierre Arnaud GUYOT (OktoPierre)
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Test copy only (tools/make_test_copy.js --module ab_reverb_classic): the owner's listening test of the improved Classic reverb (version 1.0.16). A / B: ACTUELLE = the
-// reverb of 1.0.15 (every new setting at its default: the same sound bit for bit), AMÉLIORÉE = the sliders' values. The settings are global hidden performance settings
+// reverb of 1.0.15 (STEREO 0, PRE 0, DAMP 0.25, LOW CUT off: the same sound bit for bit), AMÉLIORÉE = the sliders' values. The settings are global hidden performance settings
 // (fx_rstereo, fx_rpre, fx_rdamp, fx_rhp, fx_rwidth): every preset with reverb, the demo too, plays them. The released app has no such panel.
 (function () {
   'use strict';
   const T = window.WS_TEST;
   if (!T) return;
   const DEF = { fx_rstereo: 0, fx_rpre: 0, fx_rdamp: 0.25, fx_rhp: 20, fx_rwidth: 1 };          // the reverb of 1.0.15
-  const want = { fx_rstereo: 1, fx_rpre: 0.02, fx_rdamp: 0.35, fx_rhp: 120, fx_rwidth: 1 };     // the improved one, a first proposal
+  const want = { fx_rstereo: 0.6, fx_rpre: 0.02, fx_rdamp: 0.4, fx_rhp: 150, fx_rwidth: 1 };     // the improved one (the defaults of 1.0.16)
   let improved = true;
   const apply = () => { for (const k of Object.keys(DEF)) T.setParam(k, improved ? want[k] : DEF[k]); };
   const box = document.createElement('div');

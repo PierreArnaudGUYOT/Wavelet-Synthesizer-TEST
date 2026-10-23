@@ -36,8 +36,8 @@ const APP = {
   copyright: 'Copyright (C) 2026 Pierre Arnaud GUYOT (OktoPierre)',
   license: 'GPL v3',                 // shown on the panel; the licence is GPL-3.0-or-later (file LICENSE)
   version: '1.0',   // the version SHOWN (the panel's credit, the preset files): OktoWave 1.0, the first stable release; the technical number below is the release's (1.0.x)
-  versionNum: '1.0.15',
-  date: '2026-10-21',
+  versionNum: '1.0.16',
+  date: '2026-10-23',
   doi: '',                           // no Zenodo record yet (the base synthesizer's is 10.5281/zenodo.23431760)
   base: 'Wavelet Synthesizer beta 0.7',   // the synthesizer Okto MultiWave Synth is built on
 };
@@ -350,13 +350,15 @@ add('midi_anoff', 'All Notes Off (MIDI CC 123)', 'NOTES OFF', { min: 0, max: 1, 
 // (polyComp), now switchable to compare by ear. Two hidden performance settings (never in a preset), set by the test page of the web test copy.
 add('out_mode', 'Output Stage', 'OUTPUT', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 1, perf: true, hidden: true, choices: ['Classic', 'Limiter'], choiceShort: ['CLASSIC', 'LIMITER'] });
 add('poly_comp', 'Chord Compensation', 'CHORD COMP', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 1, perf: true, hidden: true, choices: ['Off', 'On'], choiceShort: ['OFF', 'ON'] });
-// Version 1.0.16 (web test): the Classic reverb (the Freeverb) improved around its unchanged core (the owner: "améliorer l'ancienne reverb, avec un algo similaire"). At their defaults the
-// sound is the one of 1.0.15, bit for bit: STEREO 0 (the combs hear the mono sum, as before), PRE 0 s, DAMP 0.25 (the fixed damping of every version), LOW CUT 20 Hz (off), WIDTH 1 (each
-// comb bank to its own side). For the listening test they are global hidden settings set by the test page; whether they become a preset's own comes after the owner's choice.
-add('fx_rstereo', 'Reverb Stereo Input', 'STEREO', { min: 0, max: 1, def: 0, perf: true, hidden: true });
-add('fx_rpre', 'Reverb Pre-delay', 'PRE', { fmt: 'sec', min: 0, max: 0.1, def: 0, perf: true, hidden: true });
-add('fx_rdamp', 'Reverb Damping', 'DAMP', { min: 0, max: 0.6, def: 0.25, perf: true, hidden: true });
-add('fx_rhp', 'Reverb Low Cut', 'LOW CUT', { curve: 'exp', fmt: 'hz', min: 20, max: 300, def: 20, perf: true, hidden: true });
+// Version 1.0.16: the Classic reverb (the Freeverb) improved around its unchanged core (the owner: "améliorer l'ancienne reverb, avec un algo similaire"; after his listening test of the
+// demo: "applique la reverb classique améliorée avec les réglages que tu m'as proposés"). Global hidden settings, never in a preset: every sound with reverb plays them. Their defaults are
+// the base setting proposed, the same reverb loudness over the demo as 1.0.15 (tools/reverb_demo.js: -22.35 LUFS against -22.22): STEREO 0.6 (the image of wide sounds kept, without leaning
+// to one side), PRE 20 ms (the direct sound stays clear), DAMP 0.4 (the tail loses its highs sooner: less metallic), LOW CUT 150 Hz (no low end in the reverb), WIDTH 1. The reverb of
+// 1.0.15 is STEREO 0, PRE 0, DAMP 0.25, LOW CUT 20 Hz (off), WIDTH 1 (the code takes its exact path then: tools/dsp_cases.js keeps cases of it).
+add('fx_rstereo', 'Reverb Stereo Input', 'STEREO', { min: 0, max: 1, def: 0.6, perf: true, hidden: true });
+add('fx_rpre', 'Reverb Pre-delay', 'PRE', { fmt: 'sec', min: 0, max: 0.1, def: 0.02, perf: true, hidden: true });
+add('fx_rdamp', 'Reverb Damping', 'DAMP', { min: 0, max: 0.6, def: 0.4, perf: true, hidden: true });
+add('fx_rhp', 'Reverb Low Cut', 'LOW CUT', { curve: 'exp', fmt: 'hz', min: 20, max: 300, def: 150, perf: true, hidden: true });
 add('fx_rwidth', 'Reverb Width', 'WIDTH', { min: 0, max: 1, def: 1, perf: true, hidden: true });
 
 const DELAY_BEATS = DELAY_NOTES.map(noteBeats), LFO_BEATS = LFO_NOTES.map(noteBeats);

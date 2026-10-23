@@ -119,5 +119,6 @@ module.exports = function cases(SPEC, C) {
   variant('reverb: low cut 150 Hz, damping 0.5, big room', { fx_rmix: 0.5, fx_rsize: 0.95, fx_rhp: 150, fx_rdamp: 0.5, sub_level: 0.5 }, { kind: 'chord' });
   variant('reverb: every new setting, loud chords', { fx_rmix: 0.35, fx_rsize: 0.7, fx_rstereo: 0.6, fx_rpre: 0.025, fx_rdamp: 0.4, fx_rhp: 100, fx_rwidth: 0.8 }, { kind: 'loud' }, 20);
   variant('reverb: longest pre-delay, no damping, width 0', { fx_rmix: 0.6, fx_rsize: 0.6, fx_rpre: 0.1, fx_rdamp: 0, fx_rwidth: 0 }, undefined, 40);
+  variant('reverb: the settings of 1.0.15 (the mono sum, no pre-delay, no low cut)', { fx_rmix: 0.45, fx_rsize: 0.8, fx_rstereo: 0, fx_rpre: 0, fx_rdamp: 0.25, fx_rhp: 20 }, { kind: 'chord' });
   return out;
 };

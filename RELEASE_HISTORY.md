@@ -3,6 +3,17 @@
 Created by **Pierre Arnaud GUYOT** ("OktoPierre"). Okto MultiWave Synth is built on his Wavelet Synthesizer (beta 0.7) and on
 the chord keyboard of his WaveChord work; their histories follow its own first release below.
 
+## Okto MultiWave Synth 1.0.16 — 2026-10-23 (shown as OktoWave 1.0)
+
+- **A more professional reverb** (web app and plug-in). The Classic reverb (the Freeverb of every earlier version) keeps its algorithm and its character, with four improvements around it: a **stereo input** (60 %: the combs of each side hear more of their own side, so wide sounds keep part of their image in the reverb, without leaning to one side), a **20 ms pre-delay** (the direct sound stays clear, the reverb sits just behind it), **more damping** (0.40 instead of the fixed 0.25: the tail loses its highs sooner, less metallic) and a **150 Hz low cut** on its input (no low end in the reverb: the basses stay clean). Every sound with reverb plays it, the demo too.
+- **The same reverb level**: measured over the whole demo (its 30 scenes through the real audio thread, BS.1770 loudness of the reverb alone, the piece without reverb subtracted): -22.35 LUFS against -22.22 for 1.0.15; the piece itself -0.1 LU. Per octave band the tail lasts as before in the lows and mids (1.24 s against 1.26 s at 500 Hz, SIZE 0.5) and less in the highs (0.47 s against 0.70 s at 8 kHz).
+- The presets, the panel, the output stage and the latency do not change. Your presets file, stars, saved projects and user bank are kept (a project saved with an earlier version plays the new reverb).
+
+**Details**
+- *Five hidden performance settings* (never in a preset, not shown to the host), appended after Chord Compensation: **Reverb Stereo Input** (`fx_rstereo`, 0.6), **Reverb Pre-delay** (`fx_rpre`, 0 to 0.1 s, 0.02), **Reverb Damping** (`fx_rdamp`, 0 to 0.6, 0.4; at other sample rates the same time constant as at 48 kHz), **Reverb Low Cut** (`fx_rhp`, a one-pole high-pass, 20 Hz = off to 300 Hz, 150) and **Reverb Width** (`fx_rwidth`, the Freeverb's own wet1 / wet2 mix, 1 = each comb bank to its own side, as before). With STEREO 0, PRE 0, LOW CUT off and DAMP 0.25 the code takes the exact path of 1.0.15 (a case of the C++/JS cross-check keeps it). The same operations in the C++ engine (plug-in and WebAssembly) and the JavaScript one. Cost: a few operations per sample.
+
+**Checked**: (filled in at release)
+
 ## OktoWave web update — 2026-10-23 (web app only; the plug-in stays 1.0.15)
 
 - **The web app runs the plug-in's own engine.** The C++ sound engine (`vst/src/dsp.h`), compiled to WebAssembly (`wasm/build.sh`, wasi-sdk), replaces the JavaScript engine (`web/js/core.js`) in the browser's audio thread. The author tried it on his computer ("ça marche bien") and asked for it on the official page.
