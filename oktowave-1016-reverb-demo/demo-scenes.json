@@ -1,0 +1,147 @@
+{
+ "scenes": [
+  {
+   "t": 0.25,
+   "name": "A · Wavelet Lead"
+  },
+  {
+   "t": 3.832,
+   "name": "AA · Tide Lute"
+  },
+  {
+   "t": 7.414,
+   "name": "AB · Kalimba Lung Machine LGT"
+  },
+  {
+   "t": 10.996,
+   "name": "AA · Hollow Bass"
+  },
+  {
+   "t": 14.578,
+   "name": "AA · Orbit Drum"
+  },
+  {
+   "t": 18.16,
+   "name": "AAB · Ice Rise Clav"
+  },
+  {
+   "t": 21.742,
+   "name": "A · Wave Atom Choir Shift"
+  },
+  {
+   "t": 25.325,
+   "name": "AA · Salt Beam Strings LGT"
+  },
+  {
+   "t": 28.907,
+   "name": "A · Spiccato Strings"
+  },
+  {
+   "t": 32.489,
+   "name": "AAB · Sweep Call"
+  },
+  {
+   "t": 36.071,
+   "name": "AB · Swing of Odd"
+  },
+  {
+   "t": 39.653,
+   "name": "AB · Pure Fog"
+  },
+  {
+   "t": 43.235,
+   "name": "AA · Moon & Breath LGT"
+  },
+  {
+   "t": 46.817,
+   "name": "AB · Ripple Reeds"
+  },
+  {
+   "t": 50.399,
+   "name": "B · Flute Lead"
+  },
+  {
+   "t": 53.981,
+   "name": "AB · Silk Strings"
+  },
+  {
+   "t": 57.563,
+   "name": "AA · Wood Rise Bows"
+  },
+  {
+   "t": 61.145,
+   "name": "AB · Sweep of Trumpet"
+  },
+  {
+   "t": 64.728,
+   "name": "AA · Drum Bloom LGT"
+  },
+  {
+   "t": 68.31,
+   "name": "AB · Rust Aurora LGT"
+  },
+  {
+   "t": 71.892,
+   "name": "A · Cello Section"
+  },
+  {
+   "t": 75.474,
+   "name": "AB · Step Sub"
+  },
+  {
+   "t": 79.056,
+   "name": "A · Wave Pulse Lead"
+  },
+  {
+   "t": 82.638,
+   "name": "AA · Opal Rise Chords LGT"
+  },
+  {
+   "t": 86.22,
+   "name": "AB · Bloom of Timber LGT"
+  },
+  {
+   "t": 89.802,
+   "name": "AB · Orbit Cloud"
+  },
+  {
+   "t": 93.384,
+   "name": "AB · Open Mallets"
+  },
+  {
+   "t": 96.966,
+   "name": "AA · Analog Cloud LGT"
+  },
+  {
+   "t": 100.549,
+   "name": "AA · Knock Sweep LGT"
+  },
+  {
+   "t": 104.131,
+   "name": "AB · Beam Lung Keys LGT"
+  }
+ ],
+ "levels": [
+  {
+   "set": "",
+   "piece": -14.73,
+   "reverb": -22.22,
+   "lows": -9.8,
+   "highs": -23.7
+  },
+  {
+   "set": "fx_rstereo=0.6,fx_rpre=0.02,fx_rdamp=0.4,fx_rhp=150",
+   "piece": -14.86,
+   "reverb": -22.35,
+   "lows": -13,
+   "highs": -24
+  },
+  {
+   "set": "fx_rtype=1,fx_rstereo=0.6,fx_rpre=0.02,fx_rdamp=0.4,fx_rhp=150",
+   "piece": -14.84,
+   "reverb": -22.35,
+   "lows": -10.7,
+   "highs": -24.5
+  }
+ ]
+}

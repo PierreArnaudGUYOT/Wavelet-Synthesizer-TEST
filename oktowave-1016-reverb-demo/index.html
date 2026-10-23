@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Démo · trois réverbes</title>
+<style>
+  :root { --bg: #14161c; --panel: #1c1f27; --line: #2e323d; --text: #e8e2d0; --dim: #9a9484; --gold: #c9a24a; --on: #14161c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: var(--gold); letter-spacing: .02em; }
+  .sub { color: var(--dim); margin: 0 0 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  button { font: 600 14px system-ui, sans-serif; color: var(--text); background: #2a2d36; border: 1px solid var(--gold); border-radius: 7px; padding: 10px 8px; cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.on { background: var(--gold); color: var(--on); }
+  .choices button { min-height: 64px; }
+  .choices small { display: block; font-weight: 400; font-size: 12px; opacity: .8; }
+  .transport { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+  #play { min-width: 92px; }
+  #seek { flex: 1; accent-color: var(--gold); }
+  #time { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 92px; text-align: right; }
+  #scene { margin-top: 10px; font-size: 14px; }
+  #scene b { color: var(--gold); font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 12px; font-size: 14px; }
+  label { cursor: pointer; }
+  #bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  #bar div { height: 100%; width: 0; background: var(--gold); transition: width .2s; }
+  #status { color: var(--dim); font-size: 14px; }
+  #reveal-out { color: var(--gold); font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; }
+  td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  a { color: var(--gold); }
+  .keys { color: var(--dim); font-size: 13px; }
+  @media (max-width: 520px) { .choices { grid-template-columns: 1fr; } .choices button { min-height: 0; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>OktoWave 1.0.16 · la démo avec trois réverbes</h1>
+  <p class="sub">Copie de test, pas une release. La démo de la page web, enregistrée trois fois avec le même moteur. Seule la réverbe change, et son niveau est le même dans les trois versions.</p>
+
+  <div class="card">
+    <div id="status">Chargement des trois enregistrements (65 Mo)…</div>
+    <div id="bar"><div></div></div>
+    <div class="choices" id="choices" style="margin-top:14px"></div>
+    <div class="transport">
+      <button id="play" disabled>▶ Lecture</button>
+      <input id="seek" type="range" min="0" max="1000" value="0" disabled aria-label="Position">
+      <span id="time">0:00 / 0:00</span>
+    </div>
+    <div id="scene">&nbsp;</div>
+    <div class="row">
+      <label><input type="checkbox" id="loop"> Boucler le preset en cours</label>
+      <label><input type="checkbox" id="blind"> Écoute à l'aveugle</label>
+      <button id="reveal" style="display:none;padding:4px 10px;font-size:13px">Révéler</button>
+      <span id="reveal-out"></span>
+    </div>
+    <p class="keys">Clavier : 1, 2, 3 pour changer de version · espace pour lecture / pause · ← → pour reculer / avancer de 5 s.</p>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>Version</th><th>Ce qui change</th><th>Réverbe seule</th></tr></thead>
+      <tbody id="levels"></tbody>
+    </table>
+    <p class="keys" style="margin-bottom:0">Réverbe seule : son niveau mesuré sur toute la démo (LUFS, comme les plateformes de musique), le morceau sans réverbe soustrait. Même réglages pour 2 et 3 : entrée stéréo 60 %, pré-délai 20 ms, amortissement 0,40, coupe-bas 150 Hz, largeur 100 %.</p>
+  </div>
+
+  <p class="keys">Le synthé en direct avec les trois choix : <a href="../oktowave-1016-reverb-3choix/">oktowave-1016-reverb-3choix</a> ·
+    Fichiers : <a href="demo-actuelle.wav" download>actuelle</a>, <a href="demo-classic-amelioree.wav" download>classic améliorée</a>, <a href="demo-hall.wav" download>hall</a> (WAV 48 kHz 16 bits).</p>
+</main>
+<script>
+(function () {
+  'use strict';
+  const V = [
+    { file: 'demo-actuelle.wav', name: 'ACTUELLE (1.0.15)', what: 'La réverbe Classic de la 1.0.15, sans aucun changement.' },
+    { file: 'demo-classic-amelioree.wav', name: 'CLASSIC AMÉLIORÉE', what: 'Le même algorithme (Freeverb), avec les réglages ci-dessous : plus net, moins de grave et d’aigu métallique dans la queue.' },
+    { file: 'demo-hall.wav', name: 'HALL', what: 'L’autre algorithme (réseau de 8 lignes modulées), avec les mêmes réglages, plus sombre qu’avant : ses aigus s’éteignent comme ceux de la Classic.' },
+  ];
+  const $ = (id) => document.getElementById(id);
+  const mmss = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  let ctx = null, master = null, gains = [], buffers = [], sources = [], scenes = [], duration = 0;
+  let playing = false, startAt = 0, offset = 0, choice = 0, perm = [0, 1, 2], blind = false, dragging = false;
+
+  // the choice buttons (in blind mode: X, Y, Z in a random order)
+  const btns = V.map((v, k) => { const b = document.createElement('button'); b.disabled = true; b.onclick = () => select(k); $('choices').appendChild(b); return b; });
+  function labels() {
+    btns.forEach((b, k) => {
+      b.innerHTML = blind ? `${k + 1} · ${'XYZ'[k]}<small>version cachée</small>` : `${k + 1} · ${V[k].name}<small>${['la 1.0.15', 'même algorithme', 'l’autre algorithme'][k]}</small>`;
+      b.classList.toggle('on', k === choice);
+    });
+  }
+  labels();
+
+  const pos = () => (playing ? Math.min(duration, ctx.currentTime - startAt) : offset);
+  function select(k) {
+    choice = k;
+    if (ctx) { const t = ctx.currentTime; gains.forEach((g, i) => g.gain.setTargetAtTime(perm[k] === i ? 1 : 0, t, 0.006)); }
+    labels();
+  }
+  function start(at) {
+    sources = buffers.map((b, i) => { const s = ctx.createBufferSource(); s.buffer = b; s.connect(gains[i]); return s; });
+    const t = ctx.currentTime + 0.03;
+    master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(0, t); master.gain.linearRampToValueAtTime(1, t + 0.01);
+    sources.forEach(s => s.start(t, at));
+    startAt = t - at; playing = true;
+    $('play').textContent = '❚❚ Pause';
+  }
+  function stop() {
+    if (!playing) return;
+    offset = pos();
+    sources.forEach(s => { try { s.stop(); } catch (e) { /* already stopped */ } });
+    sources = []; playing = false;
+    $('play').textContent = '▶ Lecture';
+  }
+  function seek(t) { t = Math.max(0, Math.min(duration - 0.05, t)); if (playing) { stop(); start(t); } else offset = t; }
+  function sceneAt(t) { let k = 0; for (let i = 0; i < scenes.length; i++) if (t >= scenes[i].t) k = i; return k; }
+
+  $('play').onclick = async () => { await ctx.resume(); if (playing) stop(); else start(offset >= duration - 0.05 ? 0 : offset); };
+  $('seek').oninput = () => { dragging = true; $('time').textContent = `${mmss($('seek').value / 1000 * duration)} / ${mmss(duration)}`; };
+  $('seek').onchange = () => { dragging = false; seek($('seek').value / 1000 * duration); };
+  $('blind').onchange = () => {
+    blind = $('blind').checked;
+    perm = [0, 1, 2];
+    if (blind) for (let i = 2; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+    $('reveal').style.display = blind ? '' : 'none'; $('reveal-out').textContent = '';
+    select(0);
+  };
+  $('reveal').onclick = () => { $('reveal-out').textContent = perm.map((v, k) => `${'XYZ'[k]} = ${V[v].name}`).join(' · '); };
+  document.addEventListener('keydown', (e) => {
+    if (!buffers.length || e.target.tagName === 'INPUT' && e.target.type === 'range' && e.key.startsWith('Arrow')) return;
+    if (e.key === '1' || e.key === '2' || e.key === '3') select(+e.key - 1);
+    else if (e.key === ' ') { e.preventDefault(); $('play').click(); }
+    else if (e.key === 'ArrowLeft') seek(pos() - 5);
+    else if (e.key === 'ArrowRight') seek(pos() + 5);
+  });
+
+  function frame() {
+    const t = pos();
+    if (playing && $('loop').checked) {   // the preset in place, again and again
+      const k = sceneAt(Math.max(0, t - 0.02)), a = scenes[k].t, b = k + 1 < scenes.length ? scenes[k + 1].t : duration;
+      if (t >= b - 0.01) seek(a);
+    }
+    if (playing && t >= duration - 0.01) { stop(); offset = 0; }
+    if (!dragging) { $('seek').value = Math.round(t / duration * 1000); $('time').textContent = `${mmss(t)} / ${mmss(duration)}`; }
+    const k = sceneAt(t);
+    if (scenes.length) $('scene').innerHTML = `Preset ${k + 1}/${scenes.length} : <b>${scenes[k].name}</b>`;
+    requestAnimationFrame(frame);
+  }
+
+  // loading: the three files (the progress of all the bytes), then decoded
+  async function load() {
+    const info = await (await fetch('demo-scenes.json')).json();
+    scenes = info.scenes;
+    $('levels').innerHTML = V.map((v, k) => `<tr><td><b>${k + 1}</b> · ${v.name}</td><td>${v.what}</td><td class="n">${info.levels[k].reverb.toFixed(1)} LUFS</td></tr>`).join('');
+    const got = [0, 0, 0], total = [0, 0, 0];
+    const bytes = await Promise.all(V.map(async (v, k) => {
+      const r = await fetch(v.file);
+      if (!r.ok) throw new Error(v.file + ': ' + r.status);
+      total[k] = +r.headers.get('content-length') || 21729836;
+      const rd = r.body.getReader(), parts = [];
+      for (;;) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        parts.push(value); got[k] += value.length;
+        const g = got.reduce((a, b) => a + b, 0), tt = total.reduce((a, b) => a + b, 0) || 3 * 21729836;
+        $('bar').firstElementChild.style.width = Math.min(100, 100 * g / tt) + '%';
+        $('status').textContent = `Chargement des trois enregistrements : ${(g / 1048576).toFixed(0)} / ${(tt / 1048576).toFixed(0)} Mo`;
+      }
+      const u = new Uint8Array(got[k]); let o = 0; for (const p of parts) { u.set(p, o); o += p.length; }
+      return u.buffer;
+    }));
+    $('status').textContent = 'Décodage…';
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain(); master.connect(ctx.destination);
+    buffers = await Promise.all(bytes.map(b => ctx.decodeAudioData(b)));
+    gains = buffers.map(() => { const g = ctx.createGain(); g.connect(master); return g; });
+    duration = Math.min(...buffers.map(b => b.duration));
+    select(0);
+    btns.forEach(b => { b.disabled = false; }); $('play').disabled = false; $('seek').disabled = false;
+    $('status').textContent = 'Prêt. Lance la lecture, puis passe d’une version à l’autre : le morceau continue au même endroit.';
+    $('bar').style.display = 'none';
+    requestAnimationFrame(frame);
+  }
+  load().catch((e) => { $('status').textContent = 'Erreur de chargement : ' + (e.message || e); });
+})();
+</script>
+</body>
+</html>
