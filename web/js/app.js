@@ -303,11 +303,12 @@
   function allOff() { localKeys.clear(); heldCodes.clear(); post({ t: 'alloff' }); }
 
   // ---------------------------------------------------------------- audio
-  // WebAssembly prototype: the engine the worklet runs, 'js' (core.js, the default: the app as before) or 'wasm' (the C++ engine, vst/src/dsp.h, compiled by wasm/build.sh).
-  // Chosen by #engine=wasm / #engine=js in the address, else the last choice of this browser (localStorage 'mw.engine'); WS_TEST.setEngine switches it while the audio runs
-  // (a new worklet node in the same AudioContext: the sound restarts, the demo starts again from its beginning).
-  const ENGINE_KEY = 'mw.engine';
-  let engineWanted = /engine=wasm/.test(location.hash) ? 'wasm' : /engine=js/.test(location.hash) ? 'js' : (store.get(ENGINE_KEY, 'js') === 'wasm' ? 'wasm' : 'js');
+  // The engine the worklet runs: 'wasm' (the C++ engine of the plug-in, vst/src/dsp.h, compiled to WebAssembly by wasm/build.sh: the default since the web update of 2026-10-23,
+  // about twice as light on the processor) or 'js' (core.js, the reference). #engine=js in the address forces the JavaScript engine; a browser that cannot run the module falls
+  // back to it by itself (wasmBytes fails, or the worklet reports wasmErr). No choice is remembered: the test pages of the same site used to store one (localStorage 'mw.engine'),
+  // which must not decide the official page's engine. WS_TEST.setEngine switches it while the audio runs (a new worklet node in the same AudioContext: the sound restarts, the
+  // demo starts again from its beginning).
+  let engineWanted = /engine=js/.test(location.hash) ? 'js' : 'wasm';
   const engineInfo = { running: 'none', simd: false, err: '', switches: 0 };
   let wasmCache = null;
   // the module's bytes: web/js/engine_wasm_data.js (base64, loaded on first use: a fetch of a .wasm file is refused from file://), the SIMD build when this browser validates it
@@ -365,7 +366,6 @@
   let switching = null;
   function setEngine(kind) {
     engineWanted = kind === 'wasm' ? 'wasm' : 'js';
-    store.set(ENGINE_KEY, engineWanted);
     if (!actx || !node) return Promise.resolve(engineInfo);
     if (switching) return switching.then(() => setEngine(kind));
     switching = (async () => {
