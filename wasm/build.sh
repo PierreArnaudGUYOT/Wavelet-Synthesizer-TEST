@@ -8,7 +8,8 @@
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SDK="${WASI_SDK:-C:/Users/Pierra/tools/wasi-sdk}"
-NODE="${NODE:-node}"
+NODE="${NODE:-C:/Users/Pierra/tools/node/node.exe}"
+[ -x "$NODE" ] || NODE=node
 CXX="$SDK/bin/clang++.exe"
 [ -x "$CXX" ] || CXX="$SDK/bin/clang++"
 mkdir -p "$HERE/out"
