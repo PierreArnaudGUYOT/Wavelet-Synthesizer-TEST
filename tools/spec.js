@@ -36,7 +36,7 @@ const APP = {
   copyright: 'Copyright (C) 2026 Pierre Arnaud GUYOT (OktoPierre)',
   license: 'GPL v3',                 // shown on the panel; the licence is GPL-3.0-or-later (file LICENSE)
   version: '1.0',   // the version SHOWN (the panel's credit, the preset files): OktoWave 1.0, the first stable release; the technical number below is the release's (1.0.x)
-  versionNum: '1.0.14',
+  versionNum: '1.0.15',
   date: '2026-10-21',
   doi: '',                           // no Zenodo record yet (the base synthesizer's is 10.5281/zenodo.23431760)
   base: 'Wavelet Synthesizer beta 0.7',   // the synthesizer Okto MultiWave Synth is built on
@@ -345,6 +345,11 @@ add('vel_target', 'Velocity Target', 'VEL TO', { curve: 'choice', fmt: 'choice',
 add('midi_asoff', 'All Sound Off (MIDI CC 120)', 'SND OFF', { min: 0, max: 1, def: 0.5, hidden: true });
 add('midi_rstctl', 'Reset All Controllers (MIDI CC 121)', 'RST CTL', { min: 0, max: 1, def: 0.5, hidden: true });
 add('midi_anoff', 'All Notes Off (MIDI CC 123)', 'NOTES OFF', { min: 0, max: 1, def: 0.5, hidden: true });
+// Version 1.0.15 (the output stage): the look-ahead limiter replaces the peak guard + tanh soft limiter (OUTPUT 'Limiter', the default); 'Classic' is the stage of 1.0.14, kept
+// for the owner's A/B test. Both go through the same LIM_LA delay, so the latency the plug-in reports never changes. CHORD COMP: the voice-count compensation of beta 0.3.2
+// (polyComp), now switchable to compare by ear. Two hidden performance settings (never in a preset), set by the test page of the web test copy.
+add('out_mode', 'Output Stage', 'OUTPUT', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 1, perf: true, hidden: true, choices: ['Classic', 'Limiter'], choiceShort: ['CLASSIC', 'LIMITER'] });
+add('poly_comp', 'Chord Compensation', 'CHORD COMP', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 1, perf: true, hidden: true, choices: ['Off', 'On'], choiceShort: ['OFF', 'ON'] });
 
 const DELAY_BEATS = DELAY_NOTES.map(noteBeats), LFO_BEATS = LFO_NOTES.map(noteBeats);
 for (const b of [DELAY_BEATS, LFO_BEATS]) for (let i = 1; i < b.length; i++)

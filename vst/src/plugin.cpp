@@ -368,7 +368,8 @@ class Processor : public IComponent, public IAudioProcessor, public IConnectionP
     return kInvalidArgument;
   }
   tresult PLUGIN_API canProcessSampleSize(int32 size) override { return size == kSample32 ? kResultTrue : kResultFalse; }
-  uint32 PLUGIN_API getLatencySamples() override { return 0; }
+  // version 1.0.15: the look-ahead limiter delays the output by 1.5 ms (the same in both output stages, so it never changes while the plug-in runs)
+  uint32 PLUGIN_API getLatencySamples() override { return (uint32)engine.latency(); }
   tresult PLUGIN_API setupProcessing(ProcessSetup& setup) override {
     if (setup.symbolicSampleSize != kSample32) return kResultFalse;
     // beta 0.6 (security review): only real rates; an absurd one would overflow the 4 s delay line's size

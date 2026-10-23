@@ -77,7 +77,7 @@ enum : int32_t {   // plug-in opcodes (dispatcher)
   effGetNumMidiInputChannels = 78, effGetNumMidiOutputChannels = 79
 };
 enum : int32_t {   // host opcodes (callback)
-  audioMasterAutomate = 0, audioMasterVersion = 1, audioMasterGetTime = 7, audioMasterSizeWindow = 15, audioMasterGetCurrentProcessLevel = 23,
+  audioMasterAutomate = 0, audioMasterVersion = 1, audioMasterGetTime = 7, audioMasterIOChanged = 13, audioMasterSizeWindow = 15, audioMasterGetCurrentProcessLevel = 23,
   audioMasterUpdateDisplay = 42, audioMasterBeginEdit = 43, audioMasterEndEdit = 44
 };
 enum : int32_t { effFlagsHasEditor = 1 << 0, effFlagsCanReplacing = 1 << 4, effFlagsProgramChunks = 1 << 5, effFlagsIsSynth = 1 << 8 };
@@ -267,6 +267,7 @@ class Instance {
     }
     edHost = editorHostOf(ctrl);
     if (cpComp && cpCtrl) { cpComp->connect(cpCtrl); cpCtrl->connect(cpComp); }
+    if (proc) fx.initialDelay = (int32_t)proc->getLatencySamples();   // version 1.0.15: the look-ahead limiter's delay (at 48 kHz until the host gives its rate)
     ctrl->setComponentHandler(&handler);
     MemStream s;   // the controller starts from the processor's state, as in a VST3 host
     if (comp->getState(&s) == kResultOk) { s.pos = 0; ctrl->setComponentState(&s); }
@@ -319,6 +320,9 @@ class Instance {
       comp->setActive(true);
       proc->setProcessing(true);
       scratch.assign((size_t)std::max(1, maxBlock) * 2, 0.0f);
+      // version 1.0.15: the look-ahead limiter's delay at this sample rate; a host that has seen another one is told so
+      const int32_t delay = (int32_t)proc->getLatencySamples();
+      if (delay != fx.initialDelay) { fx.initialDelay = delay; host(&fx, vst2::audioMasterIOChanged, 0, 0, nullptr, 0); }
     } else {
       proc->setProcessing(false);
       comp->setActive(false);
