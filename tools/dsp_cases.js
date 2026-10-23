@@ -120,5 +120,12 @@ module.exports = function cases(SPEC, C) {
   variant('reverb: every new setting, loud chords', { fx_rmix: 0.35, fx_rsize: 0.7, fx_rstereo: 0.6, fx_rpre: 0.025, fx_rdamp: 0.4, fx_rhp: 100, fx_rwidth: 0.8 }, { kind: 'loud' }, 20);
   variant('reverb: longest pre-delay, no damping, width 0', { fx_rmix: 0.6, fx_rsize: 0.6, fx_rpre: 0.1, fx_rdamp: 0, fx_rwidth: 0 }, undefined, 40);
   variant('reverb: the settings of 1.0.15 (the mono sum, no pre-delay, no low cut)', { fx_rmix: 0.45, fx_rsize: 0.8, fx_rstereo: 0, fx_rpre: 0, fx_rdamp: 0.25, fx_rhp: 20 }, { kind: 'chord' });
+  // version 1.0.17: PUNCH (the boost of every note's start), on notes, chords, loud chords, with the FILTER, the chord keyboard and a legato line (no boost on a legato change)
+  variant('punch: 6 dB, 50 ms, low notes favoured, notes', { punch: 6, punch_t: 0.05, punch_key: 1 });
+  variant('punch: 9 dB, 20 ms, chord', { punch: 9, punch_t: 0.02, punch_key: 1 }, { kind: 'chord' }, 30);
+  variant('punch: 12 dB, 8 ms, every note the same, loud chords', { punch: 12, punch_t: 0.008, punch_key: 0 }, { kind: 'loud' }, 20);
+  variant('punch: 4 dB, 300 ms, ladder filter, sub', { punch: 4, punch_t: 0.3, punch_key: 0.5, vf_cut: 900, vf_res: 0.5, vf_env: 0.4, sub_level: 0.5 });
+  variant('punch: 6 dB with the chord keyboard', { punch: 6, punch_t: 0.04, chord_mode: 1, chord_bass: 1 }, { kind: 'chord' });
+  variant('punch: 6 dB, legato line (one voice, glide)', { punch: 6, punch_t: 0.06, v_voices: 1, v_porta: 2, v_glide: 0.1 });
   return out;
 };

@@ -360,6 +360,12 @@ add('fx_rpre', 'Reverb Pre-delay', 'PRE', { fmt: 'sec', min: 0, max: 0.1, def: 0
 add('fx_rdamp', 'Reverb Damping', 'DAMP', { min: 0, max: 0.6, def: 0.4, perf: true, hidden: true });
 add('fx_rhp', 'Reverb Low Cut', 'LOW CUT', { curve: 'exp', fmt: 'hz', min: 20, max: 300, def: 150, perf: true, hidden: true });
 add('fx_rwidth', 'Reverb Width', 'WIDTH', { min: 0, max: 1, def: 1, perf: true, hidden: true });
+// Version 1.0.17 (web test, the owner: "les presets manquent un peu de percutant dans les basses"; a transient shaper, per note, mostly on the low notes): PUNCH, a gain boost at the start of
+// every note (not on a legato change) that falls back to nothing in TIME (exponential), larger on the low notes (LOW: 1 = the whole boost up to C3, a quarter of it from C6 up; 0 = the same
+// on every note). It never lowers the level (no compression). Global hidden settings for the listening test; PUNCH 0 = the sound of 1.0.16, bit for bit.
+add('punch', 'Punch', 'PUNCH', { fmt: 'db', min: 0, max: 12, def: 0, perf: true, hidden: true });
+add('punch_t', 'Punch Time', 'TIME', { curve: 'exp', fmt: 'sec', min: 0.005, max: 0.3, def: 0.05, perf: true, hidden: true });
+add('punch_key', 'Punch Low Notes', 'LOW', { min: 0, max: 1, def: 1, perf: true, hidden: true });
 
 const DELAY_BEATS = DELAY_NOTES.map(noteBeats), LFO_BEATS = LFO_NOTES.map(noteBeats);
 for (const b of [DELAY_BEATS, LFO_BEATS]) for (let i = 1; i < b.length; i++)

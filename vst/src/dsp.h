@@ -854,6 +854,7 @@ struct Voice {
   double mSemis = std::nan(""), mPitchF0 = 0;   // memo: the voice's frequency for its last pitch in semitones
   double wm0 = 0, wm1 = 0;   // WAVELET MORPH position at the start / end of the block
   double gain = 1; bool quick = false;   // the chord's bass note plays louder; a note dropped by a live chord change fades out quickly
+  double pu = 0;   // PUNCH (version 1.0.17): the boost's envelope, 1 at the start of a note, falling to 0
 };
 // releases the voice's own envelopes (with the AMP and MOD envelopes)
 inline void relOwn(Voice& v) { for (int s = 0; s < NS; s++) v.sl[s].own.gate(false); }
@@ -1002,7 +1003,7 @@ class Engine {
   // never glides in from notes played before it.
   void reset() {
     for (auto& v : voices) {
-      v.active = false; v.gate = false; v.held = false; v.amp = Env(); v.mod = Env(); v.age = 0; v.pitch = v.target = 60;
+      v.active = false; v.gate = false; v.held = false; v.amp = Env(); v.mod = Env(); v.age = 0; v.pitch = v.target = 60; v.pu = 0;
       for (auto& sl : v.sl) { sl.own = Env(); sl.pe = 1; sl.live = false; }
     }
     counter = 0; lastPitch = 60;
@@ -1124,7 +1125,7 @@ class Engine {
 
   // MIDI CC120: silence immediately (voices and effect tails)
   void allSoundOff() {
-    for (auto& vc : voices) { vc.active = vc.gate = vc.held = false; vc.amp = Env(); vc.mod = Env(); vc.fe = Env(); std::memset(vc.fs, 0, sizeof vc.fs); vc.fOn = false; }
+    for (auto& vc : voices) { vc.active = vc.gate = vc.held = false; vc.pu = 0; vc.amp = Env(); vc.mod = Env(); vc.fe = Env(); std::memset(vc.fs, 0, sizeof vc.fs); vc.fOn = false; }
     stackN = 0; std::memset(keys, 0, sizeof keys); chordClear();
     std::fill(dlyL.begin(), dlyL.end(), 0.0f); std::fill(dlyR.begin(), dlyR.end(), 0.0f); lpL = lpR = 0;
     for (auto& c : combs) { std::fill(c.buf.begin(), c.buf.end(), 0.0f); c.f = 0; }
@@ -1329,7 +1330,7 @@ class Engine {
   // per voice and block: the amp envelope (with the velocity gain) per sample, each oscillator's own envelope, end states
   double envAv[MAXV][CTRL], ownBuf[NS][CTRL], endPh[NS][4];   // envAv: each voice's amp envelope for the block (the filtered voices go through the filter first, see filterVoices)
   bool ownOn[NS] = {}, ownZero[NS] = {}; double ownLevel[NS] = {}; int ownStage[NS] = {};   // ownZero: the own envelope is exactly 0 for the whole block
-  double endLevel = 0, endSubPhase = 0; int endStage = 0;
+  double endLevel = 0, endSubPhase = 0, endPunch = 0; int endStage = 0;
 
   void removeFromStack(int note) {
     for (int i = 0; i < stackN; i++) if (stack[i] == note) { std::memmove(stack + i, stack + i + 1, sizeof(int) * (stackN - i - 1)); stackN--; break; }
@@ -1359,6 +1360,7 @@ class Engine {
     if (!legato) {
       vc.amp.gate(true); vc.mod.gate(true); vc.fe.gate(true);
       for (int s = 0; s < NS; s++) { Slot& sl = vc.sl[s]; for (int b = 0; b < NB; b++) sl.scaleAtk[b] = true; sl.own.gate(true); sl.pe = 1; }
+      vc.pu = 1;   // PUNCH (version 1.0.17): a new start of the note
     }
     lastPitch = note;
   }
@@ -1592,13 +1594,30 @@ class Engine {
     // change fades out in QUICK_REL at most
     const double velGain = VOICE_GAIN * (1 - p[P_AMP_VEL] * (1 - vc.vel)) * vc.gain * velVolume(vc);
     const double rQ = vc.quick && p[P_AMP_R] > QUICK_REL ? mAmpQ.get(-LN1000 / (QUICK_REL * sr)) : rC;
+    // PUNCH (version 1.0.17): the start of the note boosted by (1 + gP pu), pu falling from 1 in TIME, gP from PUNCH (dB), the whole of it on the low notes and a quarter
+    // of it from C6 up as LOW rises (a transient shaper per note: it never lowers the level). PUNCH 0: the loop of 1.0.16, bit for bit (and no boost left for later).
+    const double pdb = p[P_PUNCH];
+    if (pdb > 0) {
+      const double lowK = std::min(1.0, std::max(0.25, (84 - vc.note) / 36.0));
+      const double gP = (std::exp(pdb * (LN10 / 20)) - 1) * (1 - p[P_PUNCH_KEY] * (1 - lowK)), pd = std::exp(-1 / (p[P_PUNCH_T] * sr));
+      double pu = vc.pu;
+      for (int i = 0; i < n; i++) {
+        if (st == 1) { lev += aInc; if (lev >= 1) { lev = 1; st = 2; } }
+        else if (st == 2) lev = s + (lev - s) * dC;
+        else if (st == 3) { lev *= rQ; if (lev < 1e-5) { lev = 0; st = 0; } }
+        envA[i] = lev * velGain * (1 + gP * pu);
+        pu *= pd;
+      }
+      endLevel = lev; endStage = st; endPunch = pu < 1e-6 ? 0 : pu;
+      return;
+    }
     for (int i = 0; i < n; i++) {
       if (st == 1) { lev += aInc; if (lev >= 1) { lev = 1; st = 2; } }
       else if (st == 2) lev = s + (lev - s) * dC;
       else if (st == 3) { lev *= rQ; if (lev < 1e-5) { lev = 0; st = 0; } }
       envA[i] = lev * velGain;
     }
-    endLevel = lev; endStage = st;
+    endLevel = lev; endStage = st; endPunch = 0;
   }
   // Oscillator s's OWN ENVELOPE for the block, per sample (ownBuf[s]); its end state in ownLevel[s] / ownStage[s].
   void ownPass(const Voice& vc, int s, int n) {
@@ -2094,7 +2113,7 @@ class Engine {
       }
       renderSub(vc, n);
       // commit end-of-block state
-      vc.amp.level = endLevel; vc.amp.stage = endStage;
+      vc.amp.level = endLevel; vc.amp.stage = endStage; vc.pu = endPunch;
       vc.subPhase = endSubPhase;
       for (int s = 0; s < NS; s++) {
         Slot& sl = vc.sl[s];

@@ -557,6 +557,7 @@ function WSCoreFactory(SPEC) {
     this.fresh = true;
     this.wm0 = 0; this.wm1 = 0;   // WAVELET MORPH position
     this.gain = 1; this.quick = false;   // the chord's bass note plays louder; a note dropped by a live chord change fades out quickly
+    this.pu = 0;   // PUNCH (version 1.0.17): the boost's envelope, 1 at the start of a note, falling to 0
     this.mSemis = NaN; this.mPitchF0 = 0;   // memo: the voice's frequency for its last pitch in semitones
   }
   // releases the voice's own envelopes (with the AMP and MOD envelopes)
@@ -613,7 +614,7 @@ function WSCoreFactory(SPEC) {
     this.ownBuf = []; this.endPh = [];
     for (let s = 0; s < NS; s++) { this.ownBuf.push(new Float64Array(CTRL)); this.endPh.push(new Float64Array(4)); }
     this.ownOn = new Uint8Array(NS); this.ownLevel = new Float64Array(NS); this.ownStage = new Int32Array(NS);
-    this.endLevel = 0; this.endStage = 0; this.endSubPhase = 0;
+    this.endLevel = 0; this.endStage = 0; this.endSubPhase = 0; this.endPunch = 0;
     // beta 0.3.1: also the live gains and window of every oscillator that plays in the last voice (sg: NS x NB, swin: NS x [center, width, depth], mask: its bits), for the
     // SCOPE and the SCALOGRAM, which show the whole sound and move with the modulation (the cutoff of the LFOs and the envelopes, the note)
     this.disp = { gains: new Float32Array(NB), mode: 0, view: 0, voices: 0, peakL: 0, peakR: 0, center: 0, width: 1, depth: 0, note: -1, slotLive: false,
@@ -749,6 +750,7 @@ function WSCoreFactory(SPEC) {
     if (!legato) {
       vc.amp.gate(true); vc.mod.gate(true); vc.fe.gate(true);
       for (let s = 0; s < NS; s++) { const sl = vc.sl[s]; sl.scaleAtk.fill(1); sl.own.gate(true); sl.pe = 1; }
+      vc.pu = 1;   // PUNCH (version 1.0.17): a new start of the note
     }
     this.lastPitch = note;
   };
@@ -835,7 +837,7 @@ function WSCoreFactory(SPEC) {
   // MIDI CC120: silence immediately (voices and effect tails)
   E.allSoundOff = function () {
     this.stack.length = 0; this.keys.fill(0); this.chordClear();
-    for (const vc of this.voices) { vc.active = false; vc.gate = false; vc.held = false; vc.amp.stage = 0; vc.amp.level = 0; vc.mod.stage = 0; vc.mod.level = 0; vc.fe.stage = 0; vc.fe.level = 0; vc.fs.fill(0); vc.fOn = false; }
+    for (const vc of this.voices) { vc.active = false; vc.gate = false; vc.held = false; vc.pu = 0; vc.amp.stage = 0; vc.amp.level = 0; vc.mod.stage = 0; vc.mod.level = 0; vc.fe.stage = 0; vc.fe.level = 0; vc.fs.fill(0); vc.fOn = false; }
     this.dlyL.fill(0); this.dlyR.fill(0); this.lpL = 0; this.lpR = 0;
     for (const b of this.cB) b.fill(0);
     this.cF.fill(0);
@@ -1299,13 +1301,30 @@ function WSCoreFactory(SPEC) {
     // change fades out in QUICK_REL at most
     const velGain = VOICE_GAIN * (1 - p[P.amp_vel] * (1 - vc.vel)) * vc.gain * this.velVolume(vc);
     const rQ = vc.quick && p[P.amp_r] > QUICK_REL ? this.mAmpQ.get(-LN1000 / (QUICK_REL * sr)) : rC;
+    // PUNCH (version 1.0.17): the start of the note boosted by (1 + gP pu), pu falling from 1 in TIME, gP from PUNCH (dB), the whole of it on the low notes and a quarter
+    // of it from C6 up as LOW rises (a transient shaper per note: it never lowers the level). PUNCH 0: the loop of 1.0.16, bit for bit (and no boost left for later).
+    const pdb = p[P.punch];
+    if (pdb > 0) {
+      const lowK = Math.min(1, Math.max(0.25, (84 - vc.note) / 36));
+      const gP = (Math.exp(pdb * (Math.LN10 / 20)) - 1) * (1 - p[P.punch_key] * (1 - lowK)), pd = Math.exp(-1 / (p[P.punch_t] * sr));
+      let pu = vc.pu;
+      for (let i = 0; i < n; i++) {
+        if (st === 1) { lev += aInc; if (lev >= 1) { lev = 1; st = 2; } }
+        else if (st === 2) lev = s + (lev - s) * dC;
+        else if (st === 3) { lev *= rQ; if (lev < 1e-5) { lev = 0; st = 0; } }
+        env[i] = lev * velGain * (1 + gP * pu);
+        pu *= pd;
+      }
+      this.endLevel = lev; this.endStage = st; this.endPunch = pu < 1e-6 ? 0 : pu;
+      return;
+    }
     for (let i = 0; i < n; i++) {
       if (st === 1) { lev += aInc; if (lev >= 1) { lev = 1; st = 2; } }
       else if (st === 2) lev = s + (lev - s) * dC;
       else if (st === 3) { lev *= rQ; if (lev < 1e-5) { lev = 0; st = 0; } }
       env[i] = lev * velGain;
     }
-    this.endLevel = lev; this.endStage = st;
+    this.endLevel = lev; this.endStage = st; this.endPunch = 0;
   };
   // Oscillator s's OWN ENVELOPE for the block, per sample (ownBuf[s]); its end state in ownLevel[s] / ownStage[s].
   E.ownPass = function (vc, s, n) {
@@ -1520,7 +1539,7 @@ function WSCoreFactory(SPEC) {
       this.renderSub(vc, n);
       if (realEnv) { this.envA = realEnv; this.bufL = L; this.bufR = R; this.fltProcess(vc, n); }
       // commit end-of-block state
-      vc.amp.level = this.endLevel; vc.amp.stage = this.endStage;
+      vc.amp.level = this.endLevel; vc.amp.stage = this.endStage; vc.pu = this.endPunch;
       vc.subPhase = this.endSubPhase;
       for (let s = 0; s < NS; s++) {
         const sl = vc.sl[s];

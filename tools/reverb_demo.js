@@ -6,7 +6,7 @@
 // is left is what the reverb adds; its loudness (BS.1770: K-weighting, 400 ms blocks, the two gates) over the piece and per scene, and its share of lows and highs, against the reverb of
 // 1.0.15 (STEREO 0, PRE 0, DAMP 0.25, LOW CUT off, WIDTH 1). --wav writes the piece (16-bit stereo 48 kHz, TPDF dither) with the reverb of 1.0.15 (<prefix>-actuelle.wav) and with each setting tried
 // (<prefix>-<name>.wav: --names gives one per setting; else -nouvelle when one is tried), and <prefix>-scenes.json (the scenes' times in the files, the measures).
-//   node tools/reverb_demo.js --try "fx_rpre=0.02,fx_rdamp=0.35;fx_rhp=150" [--scenes] [--wav <prefix> [--names a,b]]
+//   node tools/reverb_demo.js --try "fx_rpre=0.02,fx_rdamp=0.35;fx_rhp=150" [--scenes] [--wav <prefix> [--names a,b]] [--ref "<k=v,...>"]   (--ref "": the defaults as the reference)
 'use strict';
 const fs = require('fs'), path = require('path');
 const { fork } = require('child_process');
@@ -102,7 +102,8 @@ function bands(x) {   // the share of the energy under 200 Hz and over 4 kHz (dB
 
 if (!args.includes('--try')) { console.error('usage: node tools/reverb_demo.js --try "k=v,...;k=v,..." [--scenes] [--wav <prefix>]'); process.exit(1); }
 const tries = opt('--try').split(';').map(s => s.trim());
-const jobs = [{ label: 'dry', set: '', dry: true }, { label: 'ref', set: OLD }].concat(tries.map((s, i) => ({ label: 't' + i, set: s })));
+const REF = opt('--ref', OLD);   // the reference (version 1.0.17: --ref "" = the defaults, for a test of another setting than the reverb's)
+const jobs = [{ label: 'dry', set: '', dry: true }, { label: 'ref', set: REF }].concat(tries.map((s, i) => ({ label: 't' + i, set: s })));
 fs.mkdirSync(OUT, { recursive: true });
 let done = 0;
 for (const j of jobs) {
@@ -128,7 +129,7 @@ function report() {
   console.log(`the demo: ${meta.names.length} scenes, ${(dry.length / 2 / sr).toFixed(1)} s; the piece without reverb ${integrated(kSquares(dry)).toFixed(2)} LUFS`);
   for (const r of rows) {
     const d = r.wet - ref.wet;
-    console.log(`${(r.j.label === 'ref' ? 'reverb of 1.0.15' : r.j.set).padEnd(78)} piece ${r.lufs.toFixed(2)} LUFS (${(r.lufs - ref.lufs >= 0 ? '+' : '') + (r.lufs - ref.lufs).toFixed(2)})  reverb ${r.wet.toFixed(2)} LUFS (${(d >= 0 ? '+' : '') + d.toFixed(2)} LU)  lows<200 ${r.band.lo.toFixed(1)} dB  highs>4k ${r.band.hi.toFixed(1)} dB  peak ${r.peak.toFixed(3)}`);
+    console.log(`${(r.j.label === 'ref' ? (REF === OLD ? 'reverb of 1.0.15' : 'reference: ' + (REF || 'the defaults')) : r.j.set).padEnd(78)} piece ${r.lufs.toFixed(2)} LUFS (${(r.lufs - ref.lufs >= 0 ? '+' : '') + (r.lufs - ref.lufs).toFixed(2)})  reverb ${r.wet.toFixed(2)} LUFS (${(d >= 0 ? '+' : '') + d.toFixed(2)} LU)  lows<200 ${r.band.lo.toFixed(1)} dB  highs>4k ${r.band.hi.toFixed(1)} dB  peak ${r.peak.toFixed(3)}`);
     if (args.includes('--scenes') && r !== ref) {
       const ds = r.scenes.map((x, k) => x - ref.scenes[k]).filter(Number.isFinite).sort((a, b) => a - b);
       console.log(`    per scene, reverb against 1.0.15 (dB): lowest ${ds[0].toFixed(2)}, median ${ds[ds.length >> 1].toFixed(2)}, highest ${ds[ds.length - 1].toFixed(2)}`);
