@@ -114,5 +114,10 @@ module.exports = function cases(SPEC, C) {
   variant('loud chord, 16 voices, CHORD COMP off', { v_voices: 16, poly_comp: 0, master: 3 }, { kind: 'loud' }, 20);
   variant('limiter: loud low square + sub square 2 octaves down (queue overflow)', { a1_lvl: 1, a_wave: 1, sub_level: 1, sub_shape: 2, sub_oct: 1, v_oct: -3, amp_s: 1, vel_amt: 0, master: 6 });
   variant('limiter: the same, OUTPUT Classic', { a1_lvl: 1, a_wave: 1, sub_level: 1, sub_shape: 2, sub_oct: 1, v_oct: -3, amp_s: 1, vel_amt: 0, master: 6, out_mode: 0 });
+  // version 1.0.16: the Classic reverb's new settings (stereo input, pre-delay, damping, low cut, width), alone and together, on wide sounds and chords
+  variant('reverb: stereo input 1, pre-delay 40 ms, width 0.5, wide unison', { fx_rmix: 0.4, fx_rsize: 0.8, fx_rstereo: 1, fx_rpre: 0.04, fx_rwidth: 0.5, v_unison: 3, v_width: 1, v_detune: 0.2 });
+  variant('reverb: low cut 150 Hz, damping 0.5, big room', { fx_rmix: 0.5, fx_rsize: 0.95, fx_rhp: 150, fx_rdamp: 0.5, sub_level: 0.5 }, { kind: 'chord' });
+  variant('reverb: every new setting, loud chords', { fx_rmix: 0.35, fx_rsize: 0.7, fx_rstereo: 0.6, fx_rpre: 0.025, fx_rdamp: 0.4, fx_rhp: 100, fx_rwidth: 0.8 }, { kind: 'loud' }, 20);
+  variant('reverb: longest pre-delay, no damping, width 0', { fx_rmix: 0.6, fx_rsize: 0.6, fx_rpre: 0.1, fx_rdamp: 0, fx_rwidth: 0 }, undefined, 40);
   return out;
 };

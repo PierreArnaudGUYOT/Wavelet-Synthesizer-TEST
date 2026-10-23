@@ -350,6 +350,14 @@ add('midi_anoff', 'All Notes Off (MIDI CC 123)', 'NOTES OFF', { min: 0, max: 1, 
 // (polyComp), now switchable to compare by ear. Two hidden performance settings (never in a preset), set by the test page of the web test copy.
 add('out_mode', 'Output Stage', 'OUTPUT', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 1, perf: true, hidden: true, choices: ['Classic', 'Limiter'], choiceShort: ['CLASSIC', 'LIMITER'] });
 add('poly_comp', 'Chord Compensation', 'CHORD COMP', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 1, perf: true, hidden: true, choices: ['Off', 'On'], choiceShort: ['OFF', 'ON'] });
+// Version 1.0.16 (web test): the Classic reverb (the Freeverb) improved around its unchanged core (the owner: "améliorer l'ancienne reverb, avec un algo similaire"). At their defaults the
+// sound is the one of 1.0.15, bit for bit: STEREO 0 (the combs hear the mono sum, as before), PRE 0 s, DAMP 0.25 (the fixed damping of every version), LOW CUT 20 Hz (off), WIDTH 1 (each
+// comb bank to its own side). For the listening test they are global hidden settings set by the test page; whether they become a preset's own comes after the owner's choice.
+add('fx_rstereo', 'Reverb Stereo Input', 'STEREO', { min: 0, max: 1, def: 0, perf: true, hidden: true });
+add('fx_rpre', 'Reverb Pre-delay', 'PRE', { fmt: 'sec', min: 0, max: 0.1, def: 0, perf: true, hidden: true });
+add('fx_rdamp', 'Reverb Damping', 'DAMP', { min: 0, max: 0.6, def: 0.25, perf: true, hidden: true });
+add('fx_rhp', 'Reverb Low Cut', 'LOW CUT', { curve: 'exp', fmt: 'hz', min: 20, max: 300, def: 20, perf: true, hidden: true });
+add('fx_rwidth', 'Reverb Width', 'WIDTH', { min: 0, max: 1, def: 1, perf: true, hidden: true });
 
 const DELAY_BEATS = DELAY_NOTES.map(noteBeats), LFO_BEATS = LFO_NOTES.map(noteBeats);
 for (const b of [DELAY_BEATS, LFO_BEATS]) for (let i = 1; i < b.length; i++)
