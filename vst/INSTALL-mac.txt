@@ -4,7 +4,7 @@ the licence text is in OktoMultiWaveSynth.vst3/Contents/Resources/LICENSE.txt.
 Source code: https://github.com/PierreArnaudGUYOT/Free-Wavelet-Synthesizer-VST
 Play it online (nothing to install): https://pierrearnaudguyot.github.io/Free-Wavelet-Synthesizer-VST/web/
 
-The same instrument as the Windows version (same sound, panel and presets: 237 sounds, a preset browser and a presets file). It is
+The same instrument as the Windows version (same sound, panel and presets: 208 sounds, a preset browser and a presets file). It is
 built and tested automatically on Apple's Macs (GitHub Actions), but not yet in every DAW: please report any problem at
 https://github.com/PierreArnaudGUYOT/Free-Wavelet-Synthesizer-VST/issues
 

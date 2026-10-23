@@ -246,7 +246,7 @@ class Instance {
     fx.magic = vst2::kMagic;
     fx.dispatcher = &sDispatch; fx.process = &sProcessAdd; fx.processReplacing = &sProcessReplacing;
     fx.setParameter = &sSetParameter; fx.getParameter = &sGetParameter;
-    fx.numPrograms = kNumPresets; fx.numParams = P_MIDI_ASOFF; fx.numInputs = 0; fx.numOutputs = 2;   // (version 1.0.12: the host sees the 175 parameters of before, not the three triggers of the MIDI panic messages, which are the last ones)
+    fx.numPrograms = kNumPresets; fx.numParams = P_MIDI_ASOFF; fx.numInputs = 0; fx.numOutputs = 2;   // (the host sees the parameters before P_MIDI_ASOFF, 177 since VELOCITY in 1.0.13; not the three triggers of the MIDI panic messages (version 1.0.12), nor the hidden perf parameters that come after them, out_mode and poly_comp (version 1.0.15): every parameter from P_MIDI_ASOFF on is left out of VST2)
     fx.flags = vst2::effFlagsHasEditor | vst2::effFlagsCanReplacing | vst2::effFlagsProgramChunks | vst2::effFlagsIsSynth;
     fx.ioRatio = 1.0f; fx.object = this;
     fx.uniqueID = ('O' << 24) | ('k' << 16) | ('M' << 8) | 'W';   // Okto MultiWave Synth (the Wavelet Synthesizer is 'OkWv')

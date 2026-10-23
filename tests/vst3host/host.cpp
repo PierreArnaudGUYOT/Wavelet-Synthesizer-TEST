@@ -5409,11 +5409,11 @@ static void testCtrlState (Module& m, HostApplication* host, Instance& in, Audio
 			if (!D1 || !D2)
 				return;
 			load (D1, modHaar);
-			const std::vector<uint8_t> crafted = makeWSC2 (1.25f, 1, "B · Space Choir");
+			const std::vector<uint8_t> crafted = makeWSC2 (1.25f, 1, "B · Flute Lead");   // (version 1.0.15: B · Space Choir left the factory list)
 			tresult r = ctlSet (*D1, crafted);
 			ctlGet (*D1, rtCtl);
 			D1->getState (rtComp);
-			check (r == kResultOk && rtCtl == crafted, "WSC2 setState then getState gives the same bytes ('B · Space Choir', modified, zoom 1.25)",
+			check (r == kResultOk && rtCtl == crafted, "WSC2 setState then getState gives the same bytes ('B · Flute Lead', modified, zoom 1.25)",
 			       strf ("setState %d; %s", r, parseCtlState (rtCtl).str ().c_str ()));
 			load (D2, rtComp);
 			tresult r2 = ctlSet (*D2, rtCtl);

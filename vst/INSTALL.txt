@@ -1,16 +1,22 @@
-OktoWave 1.0 (Okto MultiWave Synth, version 1.0.15 TEST) - VST3 / VST2 instrument for Windows 10/11 (64-bit) - a TEST version, not a release
+OktoWave 1.0 (Okto MultiWave Synth, version 1.0.15) - VST3 / VST2 instrument for Windows 10/11 (64-bit) (macOS: OktoMultiWaveSynth-1.0.15-mac.zip, same release page)
 Created by Pierre Arnaud GUYOT (OktoPierre). Free software under the GNU GPL v3 or later (GPL-3.0-or-later):
 the licence text is in OktoMultiWaveSynth.vst3\Contents\Resources\LICENSE.txt.
 Source code: https://github.com/PierreArnaudGUYOT/Okto-MultiWave-Synth
 
 Three oscillators (A1 A2 subtractive, B1 additive), three LFOs, a real filter (LADDER / OTA),
-237 presets (the ones you rated 3 or more out of 10), a chord mode with bass, an oriental keyboard.
+208 presets (the author's choice), a chord mode with bass, an oriental keyboard.
 
-NEW IN 1.0.15 (TEST VERSION)
+NEW IN 1.0.15
 - A CLEANER OUTPUT STAGE: a look-ahead limiter replaces the peak guard and the tanh soft limiter. The old stage bent every peak above -3 dBFS (a slight
   buzz on loud, dense chords); the new one looks 1.5 ms ahead and turns the volume down just before the peak: no sample above -1 dBFS, no tanh.
-  Below that level the sound is exactly the same as in 1.0.14.
+  Below -3 dBFS (where the old stage did nothing) the sound is exactly the same as in 1.0.14.
 - The plug-in now has a fixed latency of 1.5 ms, which it reports to the DAW (Ableton Live compensates it by itself).
+- The author's own sounds: the 9 factory presets he adjusted that the demo does not play take his values (A · Shimmering Strings, A · Warm Pad,
+  AA · Chalk Edge Call, AB · Resonance Storm, AAB · Static & Fibre, AA · Tide Horns, AAB · Stair & Tap, AA · Sweep of Pixel LGT, AB · Step Spiral LGT).
+  The presets of the demo keep their sound.
+- 49 presets removed (the ones the author deleted, except those the demo plays): 208 presets now (19 LGT). The order of the lists does not change;
+  a Live Set that names a removed preset keeps its sound.
+- The credits spell the name right: Jérémie Paligrini (Soul Machine).
   Your presets file, stars and user bank are kept.
 
 NEW IN 1.0.14
