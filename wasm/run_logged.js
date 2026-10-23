@@ -18,7 +18,7 @@ const pathKey = Object.keys(env).find(k => k.toUpperCase() === 'PATH') || 'PATH'
 env[pathKey] = [path.dirname(process.execPath), 'C:\\Users\\Pierra\\tools\\llvm-mingw\\bin', env[pathKey] || ''].join(path.delimiter);
 const isScript = /\.js$/i.test(script);
 // (run from the repository's root: the build scripts and the tests expect it)
-const p = spawn(isScript ? process.execPath : script, isScript ? [script, ...args] : args, { windowsHide: true, env, cwd: path.join(__dirname, '..') });
+const p = spawn(isScript ? process.execPath : script, isScript ? [script, ...args] : args, { windowsHide: true, env, cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'] });   // (no input: nothing can wait for a key)
 p.stdout.on('data', d => { process.stdout.write(d); out.write(d); });
 p.stderr.on('data', d => { process.stderr.write(d); out.write(d); });
 p.on('close', (c) => { out.end(`exit ${c}\n`, () => process.exit(c || 0)); });
