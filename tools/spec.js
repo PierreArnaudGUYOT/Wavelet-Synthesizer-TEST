@@ -358,6 +358,9 @@ add('fx_rpre', 'Reverb Pre-delay', 'PRE', { fmt: 'sec', min: 0, max: 0.1, def: 0
 add('fx_rdamp', 'Reverb Damping', 'DAMP', { min: 0, max: 0.6, def: 0.25, perf: true, hidden: true });
 add('fx_rhp', 'Reverb Low Cut', 'LOW CUT', { curve: 'exp', fmt: 'hz', min: 20, max: 300, def: 20, perf: true, hidden: true });
 add('fx_rwidth', 'Reverb Width', 'WIDTH', { min: 0, max: 1, def: 1, perf: true, hidden: true });
+// Version 1.0.16 (web test, the owner: "trois choix à tester"): REVERB TYPE Hall, the feedback delay network of the branch son-1-reverb, in place of the Freeverb, with the same settings
+// (STEREO, PRE, DAMP, LOW CUT, WIDTH) and the same level. Classic is the default. core.js only for now (the web test copy runs the JavaScript engine).
+add('fx_rtype', 'Reverb Type', 'TYPE', { curve: 'choice', fmt: 'choice', min: 0, max: 1, def: 0, perf: true, hidden: true, choices: ['Classic', 'Hall'], choiceShort: ['CLASSIC', 'HALL'] });
 
 const DELAY_BEATS = DELAY_NOTES.map(noteBeats), LFO_BEATS = LFO_NOTES.map(noteBeats);
 for (const b of [DELAY_BEATS, LFO_BEATS]) for (let i = 1; i < b.length; i++)

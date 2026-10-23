@@ -48,6 +48,21 @@ function WSCoreFactory(SPEC) {
   const POLY_FREE = 3;
   const POLY_DOWN = 0.02, POLY_UP = 0.05;   // time constants (s) of the compensation going down / back up
   const CH_BASE = 0.006, CH_DEPTH = 0.003, CH_FAST = 9.7;   // chorus: base delay, sweep per unit of depth (s), fast/slow LFO ratio
+  // Version 1.0.16 (web test): REVERB TYPE Hall (the branch son-1-reverb). It takes the Classic's input path (pre-delay, low cut, stereo input), then four all-pass diffusers per channel in
+  // series (the echoes are dense at once), then a feedback delay network: 8 lines of prime lengths, slowly modulated (the tail is smooth), mixed by an 8 x 8 Hadamard matrix. Each line has
+  // its own loss: a one-pole low-pass whose gain at 0 Hz makes the tail fall by 60 dB in RT60 and at Nyquist in RT60_HF, whatever the line's length. RT60 follows SIZE as the Freeverb's
+  // does (3 x its mean comb length / -log10(0.7 + 0.28 SIZE)), and the decay at RV_DF Hz follows DAMP as the Freeverb's combs do (feedback x their one-pole of DAMP, per pass): the tail
+  // darkens as the Classic's does, band by band (tools/reverb_ir.js; the first Hall, RT60 at Nyquist = RT60 (1 - 0.85 DAMP), kept far more highs: "trop métallique, trop de haute
+  // fréquence"). WIDTH as the Classic's.
+  const RV_LEN44 = [1021, 1327, 1601, 1973, 2311, 2693, 3137, 3581];   // the lines (samples at 44.1 kHz: 23 to 81 ms)
+  const RV_AP44 = [142, 107, 379, 277, 149, 113, 397, 293], RV_APG = [0.75, 0.75, 0.625, 0.625];   // the diffusers: four all-passes in series, left then right, and their gains
+  const RV_MOD_HZ = [0.11, 0.13, 0.17, 0.19, 0.23, 0.29, 0.31, 0.37], RV_MOD44 = 4;   // each line's slow wobble (Hz) and its depth (samples at 44.1 kHz)
+  const RV_RT_K = 3 * 1366.5 / 44100;   // 3 x the mean length of the Freeverb's combs (s): RT60 = RV_RT_K / -log10(comb feedback)
+  const RV_DF = 5000;   // the frequency (Hz) where the Hall's damping matches the Classic's
+  // the gains into the lines (from the Classic's input, 0.03 x the channel at STEREO 1) and out of them: the reverb's loudness over the demo equals the Classic's with the same settings
+  // (tools/reverb_demo.js, STEREO 0.6, PRE 20 ms, DAMP 0.4, LOW CUT 150 Hz)
+  const RV_IN = 0.25 / 0.03, RV_OUT = 1.54;
+  const HAD = 0.35355339059327373;   // 1 / sqrt(8): the Hadamard matrix keeps the energy
   // the three chorus taps are 120 degrees apart: sin(a + 2*pi*c/3) = sin(a) * CH_COS[c] + cos(a) * CH_SIN[c]
   const CH_COS = [1, -0.5, -0.5], CH_SIN = [0, 0.8660254037844386, -0.8660254037844386];
   // an effect that has nothing left to give is skipped: no voice, and the output under QUIET_PEAK for a whole echo (see block)
@@ -674,6 +689,16 @@ function WSCoreFactory(SPEC) {
     // the Classic reverb's input (version 1.0.16): the pre-delay lines (up to 0.1 s) and the low cut's states (x, y left; x, y right)
     this.rpLen = Math.ceil(0.1 * sr) + 2; this.rpL = new Float32Array(this.rpLen); this.rpR = new Float32Array(this.rpLen); this.rpW = 0;
     this.rh = new Float64Array(4);
+    // REVERB TYPE Hall (version 1.0.16): the lines (with room for the wobble), the diffusers
+    this.hvMod = RV_MOD44 * sc;
+    this.hvD = new Float64Array(8); this.hvLen = new Int32Array(8); this.hvW = new Int32Array(8); this.hvB = [];
+    for (let k = 0; k < 8; k++) { this.hvD[k] = Math.round(RV_LEN44[k] * sc); this.hvLen[k] = this.hvD[k] + Math.ceil(this.hvMod) + 4; this.hvB.push(new Float32Array(this.hvLen[k])); }
+    this.hvG = new Float64Array(8); this.hvK = new Float64Array(8); this.hvF = new Float64Array(8);   // each line's loss (gain x (1 - b), b) and its low-pass state
+    this.hvPh = new Float64Array(8); this.hvM = new Float64Array(8); this.hvDm = new Float64Array(8);   // the wobble: phase, offset now (samples), step per sample in this block
+    this.hvMemo = [NaN, NaN];   // the SIZE and DAMP the losses were computed for
+    this.haB = []; this.haLen = new Int32Array(8); this.haI = new Int32Array(8);
+    for (let k = 0; k < 8; k++) { const len = Math.round(RV_AP44[k] * sc); this.haB.push(new Float32Array(len)); this.haLen[k] = len; }
+    this.hvV = new Float64Array(8);   // the lines' outputs of the sample (scratch)
     this.quiet = 0; this.quietNeed = 1 << 30;   // samples of silence so far, and how many an idle skip needs (set by every block)
     this.vol = Math.exp(this.p[P.master] * (Math.LN10 / 20));
     this.guard = { t: GUARD_T, att: GUARD_ATT, hold: GUARD_HOLD, rel: GUARD_REL };   // (a test can change them before the first block)
@@ -692,6 +717,28 @@ function WSCoreFactory(SPEC) {
     this.chBuf = new Float32Array(this.chLen); this.chW = 0; this.chPh = 0; this.chPh2 = 0;
     for (let s = 0; s < NS; s++) this.lvlSm[s] = this.p[K[s].lvl];
   };
+  // REVERB TYPE Hall (version 1.0.16), once per block: the lines' losses when SIZE or DAMP moved, each line's wobble over the block (its offset glides from the value at the end of the
+  // last block to the one at the end of this block), the denormals flushed
+  E.hallPrep = function (n) {
+    const p = this.p, sr = this.sr, size = p[P.fx_rsize], damp = p[P.fx_rdamp];
+    if (size !== this.hvMemo[0] || damp !== this.hvMemo[1]) {
+      this.hvMemo[0] = size; this.hvMemo[1] = damp;
+      // RT60 at 0 Hz, and at RV_DF Hz the decay time of the Freeverb's mean comb (its loop gain there: feedback x its one-pole of DAMP, at 48 kHz as in the Classic)
+      const fbk = 0.7 + 0.28 * size, rt = RV_RT_K / -Math.log10(fbk), wc = 2 * Math.PI * RV_DF / 48000;
+      const rtf = RV_RT_K / -Math.log10(fbk * (1 - damp) / Math.sqrt(1 - 2 * damp * Math.cos(wc) + damp * damp)), cw = Math.cos(2 * Math.PI * RV_DF / sr);
+      for (let k = 0; k < 8; k++) {
+        // y = g (1 - b) x + b y': gain g at 0 Hz, and b such that the gain at RV_DF Hz makes the line fall as fast as the Classic does there
+        const s = this.hvD[k] / sr, g = Math.pow(10, -3 * s / rt), r2 = Math.pow(10, -6 * s * (1 / rtf - 1 / rt)), c = r2 < 1 ? (1 - r2 * cw) / (1 - r2) : 0, b = r2 < 1 ? c - Math.sqrt(c * c - 1) : 0;
+        this.hvG[k] = g * (1 - b); this.hvK[k] = b;
+      }
+    }
+    for (let k = 0; k < 8; k++) {
+      this.hvPh[k] += RV_MOD_HZ[k] * n / sr; if (this.hvPh[k] >= 1) this.hvPh[k] -= 1;
+      this.hvDm[k] = (this.hvMod * Math.sin(2 * Math.PI * this.hvPh[k]) - this.hvM[k]) / n;
+      if (Math.abs(this.hvF[k]) < 1e-20) this.hvF[k] = 0;
+    }
+  };
+
   // the look-ahead limiter at rest: silent delay, gain 1 (setSampleRate, allSoundOff, an idle block)
   E.limReset = function () {
     this.limL.fill(0); this.limR.fill(0); this.limW = 0; this.limT = 0;
@@ -841,6 +888,9 @@ function WSCoreFactory(SPEC) {
     this.cF.fill(0);
     for (const b of this.aB) b.fill(0);
     this.rpL.fill(0); this.rpR.fill(0); this.rh.fill(0);
+    for (const b of this.hvB) b.fill(0);
+    for (const b of this.haB) b.fill(0);
+    this.hvF.fill(0);
     this.chBuf.fill(0);
     this.quiet = 0;
     this.polyG = 1; this.gd = 1; this.gHold = 0;
@@ -1546,9 +1596,13 @@ function WSCoreFactory(SPEC) {
     const feedback = 0.7 + 0.28 * p[P.fx_rsize], rDamp = p[P.fx_rdamp], damp = this.sr === 48000 ? rDamp : Math.pow(rDamp, 48000 / this.sr);
     const rSt = p[P.fx_rstereo], rWid = p[P.fx_rwidth], rW1 = rWid / 2 + 0.5, rW2 = (1 - rWid) / 2;
     const rpd = p[P.fx_rpre] > 0 ? Math.max(1, Math.min(this.rpLen - 1, Math.round(p[P.fx_rpre] * this.sr))) : 0;
-    const rhA = p[P.fx_rhp] > 20 ? Math.exp(-2 * Math.PI * p[P.fx_rhp] / this.sr) : 0, rIn = rSt > 0 || rpd > 0 || rhA > 0;
+    const hall = rmix > 0 && p[P.fx_rtype] >= 0.5;   // REVERB TYPE Hall (version 1.0.16): the same input path, then its own network
+    const rhA = p[P.fx_rhp] > 20 ? Math.exp(-2 * Math.PI * p[P.fx_rhp] / this.sr) : 0, rIn = rSt > 0 || rpd > 0 || rhA > 0 || hall, rG = hall ? RV_OUT : 1.5;
     const rpL = this.rpL, rpR = this.rpR, rpLen = this.rpLen, rh = this.rh;
     let rpw = this.rpW;
+    if (hall) this.hallPrep(n);
+    const haB = this.haB, haI = this.haI, haLen = this.haLen;
+    const hvB = this.hvB, hvLen = this.hvLen, hvW = this.hvW, hvD = this.hvD, hvM = this.hvM, hvDm = this.hvDm, hvG = this.hvG, hvK = this.hvK, hvF = this.hvF, hvV = this.hvV;
     if (rhA) for (let q = 0; q < 4; q++) if (Math.abs(rh[q]) < 1e-20) rh[q] = 0;
     const volT = this.mVol.get(p[P.master] * (Math.LN10 / 20));
     const kDly = this.kDly, kLp = this.kLp, kVol = this.kVol;
@@ -1623,21 +1677,42 @@ function WSCoreFactory(SPEC) {
           inL = m + s; inR = m - s;
         } else inL = inR = (l + r) * 0.015;
         let wl = 0, wr = 0;
-        for (let q = 0; q < 16; q++) {
-          const buf = cB[q], ci = cI[q], y = buf[ci];
-          const f = y * (1 - damp) + cF[q] * damp; cF[q] = f;
-          buf[ci] = (q < 8 ? inL : inR) + f * feedback;
-          cI[q] = ci + 1 >= cLen[q] ? 0 : ci + 1;
-          if (q < 8) wl += y; else wr += y;
+        if (hall) {
+          // Hall: four all-passes per channel (v = x + g buf; out = buf - g v), then the 8 lines, each read hvD + its wobble samples back (linear interpolation), through its loss
+          let xl = inL * RV_IN, xr = inR * RV_IN;
+          for (let q = 0; q < 4; q++) { const b = haB[q], j = haI[q], bo = b[j], v = xl + RV_APG[q] * bo; b[j] = v; xl = bo - RV_APG[q] * v; haI[q] = j + 1 >= haLen[q] ? 0 : j + 1; }
+          for (let q = 4; q < 8; q++) { const b = haB[q], j = haI[q], bo = b[j], v = xr + RV_APG[q - 4] * bo; b[j] = v; xr = bo - RV_APG[q - 4] * v; haI[q] = j + 1 >= haLen[q] ? 0 : j + 1; }
+          for (let q = 0; q < 8; q++) {
+            const b = hvB[q], len = hvLen[q];
+            let rp = hvW[q] - (hvD[q] + hvM[q]); if (rp < 0) rp += len;
+            const i0 = Math.floor(rp), fr = rp - i0; let i1 = i0 + 1; if (i1 >= len) i1 = 0;
+            const v = b[i0] + fr * (b[i1] - b[i0]);
+            hvV[q] = v; hvF[q] = hvG[q] * v + hvK[q] * hvF[q]; hvM[q] += hvDm[q];
+          }
+          // the Hadamard matrix (butterflies), then each line takes its mix plus the input (the even lines the left, the odd ones the right)
+          const a0 = hvF[0] + hvF[1], a1 = hvF[0] - hvF[1], a2 = hvF[2] + hvF[3], a3 = hvF[2] - hvF[3], a4 = hvF[4] + hvF[5], a5 = hvF[4] - hvF[5], a6 = hvF[6] + hvF[7], a7 = hvF[6] - hvF[7];
+          const b0 = a0 + a2, b1 = a1 + a3, b2 = a0 - a2, b3 = a1 - a3, b4 = a4 + a6, b5 = a5 + a7, b6 = a4 - a6, b7 = a5 - a7;
+          hvB[0][hvW[0]] = (b0 + b4) * HAD + xl; hvB[1][hvW[1]] = (b1 + b5) * HAD + xr; hvB[2][hvW[2]] = (b2 + b6) * HAD + xl; hvB[3][hvW[3]] = (b3 + b7) * HAD + xr;
+          hvB[4][hvW[4]] = (b0 - b4) * HAD + xl; hvB[5][hvW[5]] = (b1 - b5) * HAD + xr; hvB[6][hvW[6]] = (b2 - b6) * HAD + xl; hvB[7][hvW[7]] = (b3 - b7) * HAD + xr;
+          for (let q = 0; q < 8; q++) hvW[q] = hvW[q] + 1 >= hvLen[q] ? 0 : hvW[q] + 1;
+          wl = hvV[0] + hvV[2] + hvV[4] + hvV[6]; wr = hvV[1] + hvV[3] + hvV[5] + hvV[7];
+        } else {
+          for (let q = 0; q < 16; q++) {
+            const buf = cB[q], ci = cI[q], y = buf[ci];
+            const f = y * (1 - damp) + cF[q] * damp; cF[q] = f;
+            buf[ci] = (q < 8 ? inL : inR) + f * feedback;
+            cI[q] = ci + 1 >= cLen[q] ? 0 : ci + 1;
+            if (q < 8) wl += y; else wr += y;
+          }
+          for (let q = 0; q < 8; q++) {
+            const buf = aB[q], ai = aI[q], bo = buf[ai], x = q < 4 ? wl : wr;
+            buf[ai] = x + bo * 0.5;
+            aI[q] = ai + 1 >= aLen[q] ? 0 : ai + 1;
+            if (q < 4) wl = bo - x; else wr = bo - x;
+          }
         }
-        for (let q = 0; q < 8; q++) {
-          const buf = aB[q], ai = aI[q], bo = buf[ai], x = q < 4 ? wl : wr;
-          buf[ai] = x + bo * 0.5;
-          aI[q] = ai + 1 >= aLen[q] ? 0 : ai + 1;
-          if (q < 4) wl = bo - x; else wr = bo - x;
-        }
-        if (rWid === 1) { l += rmix * wl * 1.5; r += rmix * wr * 1.5; }
-        else { l += rmix * (wl * rW1 + wr * rW2) * 1.5; r += rmix * (wr * rW1 + wl * rW2) * 1.5; }   // WIDTH (version 1.0.16): the Freeverb's own wet1 / wet2 mix
+        if (rWid === 1) { l += rmix * wl * rG; r += rmix * wr * rG; }
+        else { l += rmix * (wl * rW1 + wr * rW2) * rG; r += rmix * (wr * rW1 + wl * rW2) * rG; }   // WIDTH (version 1.0.16): the Freeverb's own wet1 / wet2 mix
       }
       // DC blocker (10 Hz), master volume, soft limiter
       const yl = l - this.dcxL + this.dcR * this.dcyL; this.dcxL = l; this.dcyL = Math.abs(yl) < 1e-20 ? 0 : yl; l = this.dcyL;
@@ -1687,7 +1762,7 @@ function WSCoreFactory(SPEC) {
     // how long the output stage's input has been silent, and how long it must stay so before the block is skipped
     if (voices === 0 && !fading && bpk < QUIET_PEAK) this.quiet += n; else this.quiet = 0;
     this.rpW = rpw;
-    this.quietNeed = Math.ceil(1.5 * (dmix > 0 || fb > 0 ? Math.max(dTarget, this.dlyT) : 0)) + QUIET_EXTRA + limD + rpd;   // (version 1.0.16: and the reverb's pre-delay)
+    this.quietNeed = Math.ceil(1.5 * (dmix > 0 || fb > 0 ? Math.max(dTarget, this.dlyT) : 0)) + QUIET_EXTRA + limD + rpd + (hall ? hvLen[7] : 0);   // (version 1.0.16: and the reverb's pre-delay, the Hall's longest line)
     this.publish(pkL, pkR, voices);
   };
 
